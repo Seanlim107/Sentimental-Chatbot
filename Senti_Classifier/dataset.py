@@ -5,35 +5,53 @@ import torch.utils
 import pandas as pd
 from datasets import load_dataset
 from torch.utils import data
+from torch.utils.data import Dataset
 from collections import Counter, OrderedDict
 import re
+import nltk
+import math
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from torch.utils.data import TensorDataset, DataLoader, random_split
+
+
+
 
 # chatbot_dataset = load_dataset("daily_dialog")
 # dialog_df_train = pd.DataFrame.from_dict(chatbot_dataset['train'])
 
 # temp_dict_train = {'sentence': dialog_df_train['dialog'], 'act': dialog_df_train['act'], 'emotion': dialog_df_train['emotion']}
 
-
+# nltk.load('english', format='text')
 
 class DialogData(data.Dataset):
     UNK_TOKEN = '<UNK>'
     START_TOKEN = "<S>"
     END_TOKEN = "</S>"
     
-    def __init__(self, max_seq=None, voc_init=False):
+    def __init__(self, max_seq=None, voc_init=False, lem=False, stem=False):
         self.max_seq = max_seq
         self.unk_token = self.UNK_TOKEN
         self.end_token = self.END_TOKEN
         self.start_token = self.START_TOKEN
         self.chatbot_dataset = load_dataset("daily_dialog")
         
+        self.stopwords = stopwords.words('english')
+        self.voc_dict = OrderedDict()
+        self.output_size = 1
+        
+        # For lemmatization or stemming
+        self.lem = lem
+        self.stem = stem
+        self.vocab_senti = []
+        self.X = []
+        self.y = []
         
         # Overall dataset
         self.dialog_df = pd.DataFrame.from_dict(self.chatbot_dataset['train'])
         self.dialog_df = pd.concat([self.dialog_df, pd.DataFrame.from_dict(self.chatbot_dataset['test'])])
         self.dialog_df = pd.concat([self.dialog_df, pd.DataFrame.from_dict(self.chatbot_dataset['validation'])])
-        
-        
+        self.dialoglist = None
         
         # #dataset for sentiment analysis
         self.sentiment_sentences_df = self.dialog_df.copy()
@@ -41,64 +59,28 @@ class DialogData(data.Dataset):
         
         # Referencing code obtained from INM706 Lab 4
         if voc_init:
-            self.voc = self.create_vocab()
-            with open("vocabulary.pkl", "wb") as file:
-                pickle.dump(self.voc, file)
+            # self.voc = self.create_vocab()
+            # with open("vocabulary.pkl", "wb") as file:
+            #     pickle.dump(self.voc, file)
+                
+            self.create_vocab_senti()
+            self.vocab_senti = sorted(self.vocab_senti)
+            with open("vocabulary_senti.pkl", "wb") as file:
+                pickle.dump(self.vocab_senti, file)
         else:
-            self.load_vocab()
-        
-    # ____________ Referencing code from INM706 Lab 4 ___________
-    # ___________________________________________________________
-    def load_vocab(self):
-        path_vocab = os.path.join(os.getcwd(), 'vocabulary.pkl')
-        if os.path.exists(path_vocab):
-            # Load the object back from the file
-            with open(path_vocab, "rb") as file:
-                self.voc = pickle.load(file)
-        return
-    
-    def create_vocab(self):
-        dialogclean = self.sentiment_sentences_df.copy()
-        dialogclean = dialogclean['dialog'].dropna()
-        dialoglist = dialogclean.tolist()
-        
-        vocab = []
-        
-        for sentence in dialoglist:
-            try:
-                sentence_trimmed = re.sub('\W+', ' ', sentence).split()
-                # print(sentence_trimmed)
-                for word in sentence_trimmed:
-                    if word not in vocab:
-                        vocab.append(word)
-            except:
-                print(sentence)
-        
-        vocab.append(self.unk_token)
-        vocab.append(self.start_token)
-        vocab.append(self.end_token)
-        
-        return sorted(vocab)
-    
-    # sets the input (X) and output (y) data for training
-    def setdata(self):
-        sentimentclean = self.sentiment_sentences_df.dropna()
-        
-        dialoglist = sentimentclean['dialog'].tolist()
-        emotionlist = sentimentclean['emotion'].tolist()
-        
-        X = []
-        y = []
-        
-        for iter,i in enumerate(dialoglist):
-            tokens=[]
-            tokenized_list = re.sub('\W+', ' ', i).split()
-            emotion = emotionlist[iter]
-            tokenized_list = self.trim_sentence(tokenized_list)
-            tokens.append(tokenized_list)
-            X.append(tokens)
-            y.append(emotion)
-        return pd.DataFrame({'X':X, 'y':y})
+            # self.load_self.vocab()
+            self.load_vocab_senti()
+            self.vocab_senti = sorted(self.vocab_senti)
+            
+        for idx, word in enumerate(self.vocab_senti):
+            self.voc_dict[word] = idx
+            
+        self.voc_keys = self.voc_dict.keys()
+        self.len_voc_keys = len(self.voc_keys)
+
+    def tokenize(self, text):
+        text_tokens = word_tokenize(re.sub('\W+', ' ', text.lower()))
+        return text_tokens
         
     def trim_sentence(self, tokenized_k):
         if len((tokenized_k)) > self.max_seq:
@@ -110,36 +92,89 @@ class DialogData(data.Dataset):
             if len(seq_pad) > 0:
                 tokenized_k.extend(seq_pad)
         return tokenized_k
+
+    # sets the input (X) and output (y) data for training
+    def setdata_senti(self, train_size=0.8, batch_size=16):
         
-    def load_dialog_text(self, dialog):
-        list_lines_text = dialog['lines']
-        list_lines = re.findall(r'\b\w+\b', list_lines_text)
-        print(list_lines)
-        movie_id = dialog['movie']
-        all_lines = []
-        lines_dict = {}
-        prev_line = None
-        count = 0
-        for line in list_lines:
-            line_text = self.lines_data.loc[(self.lines_data['line_id'] == line) & (self.lines_data['movie_id'] == movie_id)]
-            if len(line_text) == 1:
-                if prev_line is not None:
-                    lines_dict[prev_line] = line_text['line'].item()
-                    prev_line = line_text['line'].item()
-                else:
-                    prev_line = line_text['line'].item()
-                all_lines.append(line_text['line'].item())
+        #Initialise variables
+        sentimentclean = self.sentiment_sentences_df.dropna()
+        
+        dialoglist = sentimentclean['dialog'].tolist()
+        emotionlist = sentimentclean['emotion'].tolist()
+        self.output_size = max(emotionlist)
+        
+        
+        # print(dialoglist)
+        # set X and y data for training
+        for iter,i in enumerate(dialoglist):
+            tokenized_list = self.tokenize(i)
+            tokenized_list = self.trim_sentence(tokenized_list)
+            tokenized_list = [self.voc_dict[x] for x in tokenized_list]
+            emotion = emotionlist[iter]
+            self.X.append(tokenized_list)
+            self.y.append(emotion)
+        
 
+        #Load to dataloader
+        
+        # print(self.X_tensor)
 
-        pairs = [(all_lines[i], all_lines[i + 1]) for i in range(len(all_lines) - 1)]
-        # print('pairs ', pairs)
-        # print('linesdict ',lines_dict)
-        return pairs, lines_dict
+        dataset_to_dataloader = DataLoaderToken(self.X, self.y)
+        data_len = len(dataset_to_dataloader)
+        train_len = int(data_len*train_size)
+        test_len = int((data_len - train_len)/2)
+        val_len = data_len - train_len - test_len
+        
+        train_dataset, test_dataset, val_dataset = random_split(dataset_to_dataloader, [train_len, test_len, val_len])
+        train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+        val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        
+        
+        return train_dataloader, test_dataloader, val_dataloader
     
-    # ______________________________________________________________
-    # ____________ Referencing code from INM706 Lab 4 ______________
-
-
-# dataset_dialog = DialogData(voc_init=True, max_seq=10)
-# input_df = dataset_dialog.setdata()
-# print(input_df.head())
+    def create_vocab_senti(self):
+        dialogclean = self.sentiment_sentences_df.copy()
+        dialogclean = dialogclean['dialog'].dropna()
+        dialoglist = dialogclean.tolist()
+        
+        
+        for sentence in dialoglist:
+            # print(sentence)
+            try:
+                sentence_trimmed = self.tokenize(sentence)
+                # print(sentence_trimmed)
+                for senti_word in sentence_trimmed:
+                    if senti_word not in self.vocab_senti:
+                            self.vocab_senti.append(senti_word)
+            except:
+                continue
+                # print(sentence)
+        
+        self.vocab_senti.append(self.unk_token)
+        self.vocab_senti.append(self.start_token)
+        self.vocab_senti.append(self.end_token)
+        
+        return
+    
+    def load_vocab_senti(self):
+        path_vocab = os.path.join(os.getcwd(), 'vocabulary_senti.pkl')
+        if os.path.exists(path_vocab):
+            # Load the object back from the file
+            with open(path_vocab, "rb") as file:
+                self.vocab_senti = pickle.load(file)
+        return
+    
+    
+class DataLoaderToken(Dataset):
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+        
+    def __len__(self):
+        return len(self.X)
+    
+    def __getitem__(self, index):
+        return torch.tensor(self.X[index], dtype=torch.long), torch.tensor(self.y[index], dtype=torch.long)
+        

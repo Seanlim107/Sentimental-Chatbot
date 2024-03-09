@@ -1,0 +1,15 @@
+data:
+  max_seq: 10
+
+model:
+  embedding_dim: 256
+  lstm_hidden_dim: 256
+  hidden_dim: 512
+  hidden_dim2: 256
+  n_layers: 3
+  drop_prob: 0.5
+  
+train:
+    epochs: 5
+    batch_size: 4
+    learning_rate: 0.001
