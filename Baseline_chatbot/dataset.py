@@ -1,3 +1,4 @@
+# %%
 import os
 import torch
 import pickle
@@ -6,6 +7,10 @@ import pandas as pd
 from torch.utils import data
 from collections import Counter, OrderedDict
 
+from tokenizers import SentencePieceBPETokenizer
+from transformers import PreTrainedTokenizerFast, AutoTokenizer
+
+# jaxtype pleasseee
 import re
 import sentencepiece as spm
 
@@ -42,78 +47,135 @@ class MoviePhrasesData(data.Dataset):
         self.start_token = self.START_TOKEN
 
         if voc_init:
-            self.voc = self.create_vocab()
-            with open("vocabulary.pkl", "wb") as file:
-                pickle.dump(self.voc, file)
+            self.voc = self.train_tokenizer()
         else:
-            self.load_vocab()
+            self.load_tokenizer()
+        
+        self.vocab = self.tokenizer.vocab  #unsorted list
 
-    def create_vocab(self):
+    # def _create_raw_text_file(self):
+    #     movie_lines = self.lines_data["line"]
+    #     cleaned_movies = movie_lines.dropna()
+    #     cleaned_movies_lines = cleaned_movies.tolist()  # list of all interventions
+
+    #     # Create a raw text file from the movie lines
+    #     with open("movie_lines.txt", "w", encoding="utf-8") as file:
+    #         for line in cleaned_movies_lines:
+    #             file.write(f"{line}\n")
+
+    
+    def load_tokenizer(self):
+        # Load the tokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            os.path.join("Baseline_chatbot", "GRU_tokenizer"))
+    
+    def train_tokenizer(
+        self, vocab_size=18000
+    ):
+        """
+        Trains a SentencePiece tokenizer on the text of Cornell's dataset.
+        Text is processed: each intervention is a string elements of the list.
+
+        :param input_text_file: Path to the file containing text to train the tokenizer.
+        :param vocab_size: Size of the vocabulary.
+        """
         movie_lines = self.lines_data["line"]
         cleaned_movies = movie_lines.dropna()
         cleaned_movies_lines = cleaned_movies.tolist()  # list of all interventions
 
-        vocab = []
-        voc_idx = OrderedDict()  # not used
-
-        for line in cleaned_movies_lines:
-            # get the list of trimmed tokens - get rid of non-letter chars
-            try:
-                phrase_trimmed = re.sub("\W+", " ", line).split()
-                # \W+ matches any non-word character -> they are replaced by a space
-                # removes punctuation and other non-letter characters
-                # => Chatbot:   are . and , important ?
-                # split() splits the string into a list of words
-                for word in phrase_trimmed:
-                    if word not in vocab:
-                        vocab.append(word)
-                # adds the word to the vocabulary.
-            except:
-                print(line)
-
-        vocab.append(self.end_token)
-        vocab.append(self.start_token)
-        vocab.append(self.unk_token)
-
-        return sorted(vocab)
-
-        # PROBLEMS:
-
-    def load_vocab(self):
-        path_vocab = os.path.join(os.getcwd(), "vocabulary.pkl")
-        if os.path.exists(path_vocab):
-            # Load the object back from the file
-            with open(path_vocab, "rb") as file:
-                self.voc = pickle.load(file)
-        else:
-            raise FileNotFoundError("Vocabulary file not found")
-        return
-
-    # evaluate whether it works  (properly merge with the rest of text)
-    def train_sentencepiece_tokenizer(
-        self, input_text_file, model_prefix, vocab_size=32000
-    ):
-        """
-        Trains a SentencePiece tokenizer on the given text file.
-
-        :param input_text_file: Path to the file containing text to train the tokenizer.
-        :param model_prefix: Prefix for the output model and vocabulary files.
-        :param vocab_size: Size of the vocabulary.
-        """
-        spm.SentencePieceTrainer.train(
-            f"--input={input_text_file} --model_prefix={model_prefix} --vocab_size={vocab_size} --character_coverage=0.9995 --model_type=bpe"
+        tokenizer = SentencePieceBPETokenizer()
+        tokenizer.train_from_iterator(
+            cleaned_movies_lines,
+            vocab_size=vocab_size,  # Desired vocabulary size
+            min_frequency=5,  # Minimum frequency for a token to be included
+            show_progress=True,
+            limit_alphabet=500,  # Limits the number of initial characters to consider
         )
-        self.tokenizer = spm.SentencePieceProcessor()
-        self.tokenizer.load(f"{model_prefix}.model")
+        tokenizer = PreTrainedTokenizerFast(tokenizer_object=tokenizer)
 
-    def new_create_vocab(self):
-        # Assuming you've already preprocessed your dataset into a single text file
-        # where each line is a movie line.
-        input_text_file = "movie_lines.txt"
-        model_prefix = "movie_dialogue_tokenizer"
-        vocab_size = 60000  # Adjust vocab size as needed
+        special_tokens_dict = {
+        "bos_token": "<s>",
+        "eos_token": "</s>",
+        "pad_token": "<pad>",
+        }
+        tokenizer.add_special_tokens(special_tokens_dict)
+        self.tokenizer = tokenizer
 
-        self.train_sentencepiece_tokenizer(input_text_file, model_prefix, vocab_size)
+        self.tokenizer.save_pretrained(os.path.join("Baseline_chatbot", "GRU_tokenizer"))
 
-        # At this point, the tokenizer is trained and loaded. You can use self.tokenizer
-        # for tokenizing and detokenizing text.
+    def load_dialogue_text(self, dialogue):
+        """
+        From a dialogue --movie and some lines defining it.
+        (Think about it as one line of the movie_conversations.tsv)
+        Outputs:
+         dict: dictionary mapping a line to the next one
+        """
+        list_lines_text = dialogue["lines"]
+        list_lines = list_lines_text.strip("[]").replace("'", "").split()
+        movie_id = dialogue["movie"]
+        lines_dict = {}
+        for i in range(len(list_lines) - 1):
+            #obtain line text from its id
+            line_text = self.lines_data.loc[
+                (self.lines_data["line_id"] == list_lines[i])
+                & (self.lines_data["movie_id"] == movie_id)
+            ]
+            next_line_text = self.lines_data.loc[
+                (self.lines_data["line_id"] == list_lines[i+1])
+                & (self.lines_data["movie_id"] == movie_id)]
+            lines_dict[line_text] = next_line_text
+        return lines_dict
+            
+
+
+
+
+    def trim_or_pad_sentence(self, tokenized_sentence):
+        """
+        Trims or pads a sentence to max_seq_len.
+        """
+
+    def load_dialogue(self, dialogue):
+        """
+        For a dialogue with K interventions,
+        returns a tuple of 2 tensors each with dimensions ((K-1)x max_seq_len),
+        representing the queries and the replies.
+        Max_seq_len is the maximum number of tokens in a sentence,
+        so each sentences is trimmed or padded beforehand.
+        Sentences also need to be tokenized.
+        """
+    
+    
+    # number of dialogues, 83097
+    def __len__(self):
+        return len(self.movies_data)
+    # the dataset is just the dialogues in movie_conversations.tsv
+
+    # x: query
+    # y: reply
+    # idx: index of the dialogue
+    # output: tuple of two torch tensor stacks dimensions ((K-1)x max_seq_len)
+    def __getitem__(self, idx):
+        self.dialogue = self.movies_data.iloc[idx]  # data for that row in movie_conversations.tsv
+        self.phrases = self.load_dialogue(self.dialogue)  
+        return idx, self.phrases
+    # for every dialogue in the movie_conversations.tsv,
+    # return the dialogue index and the tensors for (all_inputs, all_outputs) 
+
+# %%
+ """
+ EXAMPLE TO ENCODE BATCHES!
+ 
+ encoded_batch = transformer_tokenizer.encode_batch(
+    ["Your first sentence.", "Your second, much longer, sentence."],
+    padding=True,  # Enable padding
+    max_length=10,  # Specify the desired maximum length
+    truncation=True,  # Enable truncation to max_length
+    return_tensors="pt"  # Return PyTorch tensors
+)"""
+
+"""
+EXAMPLE TO ENCODE SINGLE SENTENCE!
+inputs = tokenizer("Hello, world!", padding=True, truncation=True, return_tensors="pt")
+
+"""
