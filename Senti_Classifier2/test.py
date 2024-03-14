@@ -34,9 +34,10 @@ def evaluate(logger, data_settings, model, dataloader):
     for X,y in dataloader:
         X, y = X.to(device), y.to(device)
         ypred = model(X)
+        ypred = torch.argmax(ypred, axis=0, keepdims=False)
         
-        true_labels.append(y)
-        predicted_labels.append(ypred)
+        true_labels.append(y.item())
+        predicted_labels.append(ypred.item())
         
     overall_accuracy = accuracy_score(true_labels, predicted_labels)
     precision = precision_score(true_labels, predicted_labels)
@@ -62,8 +63,8 @@ def train(data_settings, model_settings, train_settings):
     val_len = data_len - train_len - test_len
     train_dataset,test_dataset,val_dataset=random_split(dialogdata, [train_len, test_len, val_len])
     train_dataloader = DataLoader(train_dataset, batch_size=data_settings['batch_size'], shuffle=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=data_settings['batch_size'], shuffle=False)
-    val_dataloader = DataLoader(val_dataset, batch_size=data_settings['batch_size'], shuffle=False)
+    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
     my_lstm = SentimentLSTM(vocab_senti_size=dialogdata.len_voc_keys, embedding_dim=model_settings['embedding_dim'],
                             output_size=dialogdata.output_size, lstm_hidden_dim=model_settings['lstm_hidden_dim'], hidden_dim=model_settings['hidden_dim'],
@@ -100,8 +101,8 @@ def train(data_settings, model_settings, train_settings):
         
         logger.log({'train_loss': total_loss/len(train_dataloader)})
         print('Epoch:{}, Train Loss:{}'.format(epoch, total_loss/len(train_dataloader)))
-        print(torch.cuda.memory_summary(device=None, abbreviated=False))
-        evaluate(logger,data_settings,my_lstm,train_dataloader)
+        # print(torch.cuda.memory_summary(device=None, abbreviated=False))
+        # evaluate(logger,data_settings,my_lstm,train_dataloader)00
         evaluate(logger,data_settings,my_lstm,test_dataloader)
         evaluate(logger,data_settings,my_lstm,val_dataloader)
     return
