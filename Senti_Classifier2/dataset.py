@@ -15,9 +15,9 @@ from collections import Counter, OrderedDict
 import re
 from torch.utils.data import Dataset
 
-nltk.download('wordnet')
-nltk.download('punkt')
-nltk.download('stopwords')
+# nltk.download('wordnet')
+# nltk.download('punkt')
+# nltk.download('stopwords')
 
 
 class DialogData(data.Dataset):
@@ -153,17 +153,18 @@ class DialogData(data.Dataset):
                 
             except:
                 raise Exception('Unknown error occured')
+        self.X = ind_list
+        self.y = emotionlist
         return ind_list, emotionlist
     
         
     
     def __len__(self):
-        return len(self.sentiment_sentences_df)
+        return len(self.X)
     
     def __getitem__(self, index):
-        X,y = self.prepare_dataloader()
-        X = torch.tensor(X[index], dtype=torch.int)
-        y = torch.tensor(int(y[index]), dtype=torch.int)
+        X = torch.tensor(self.X[index], dtype=torch.int)
+        y = torch.tensor(int(self.y[index]), dtype=torch.int)
         return X, y
     
     

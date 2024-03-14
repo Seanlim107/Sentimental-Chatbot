@@ -18,17 +18,45 @@ from dataset import DialogData
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 import matplotlib.pyplot as plt
 import seaborn as sns
+torch.cuda.empty_cache()
 
 device = torch.device('cpu')
 if torch.cuda.is_available():
     device = torch.device('cuda')
+print(device)
+
+def evaluate(logger, data_settings, model, dataloader):
+    model.eval()
+    num_outputs = data_settings['num_output']
+    true_labels = []
+    predicted_labels = []
     
+    for X,y in dataloader:
+        X, y = X.to(device), y.to(device)
+        ypred = model(X)
+        
+        true_labels.append(y)
+        predicted_labels.append(ypred)
+        
+    overall_accuracy = accuracy_score(true_labels, predicted_labels)
+    precision = precision_score(true_labels, predicted_labels)
+    recall = recall_score(true_labels, predicted_labels)
+    
+    logger.log({"Overall Accuracy": overall_accuracy,
+                "Precision": precision,
+                "Recall": recall,
+    })
+    print("Overall accuracy = {0:.4f}, precision = {1:.4f}, recall={2:.4f}".format(overall_accuracy, precision, recall))
+    
+    return
+            
 def train(data_settings, model_settings, train_settings):
     # dataset = DialogData(voc_init=False, max_seq=10)
     # print(dataset)
-    voc_init='False'
+    voc_init='True'
     dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings['max_seq'])
-    data_len = len(dialogdata.sentiment_sentences_df)
+    dialogdata.prepare_dataloader()
+    data_len = len(dialogdata.X)
     train_len = int(data_len*data_settings['train_size'])
     test_len = int((data_len - train_len)/2)
     val_len = data_len - train_len - test_len
@@ -37,7 +65,6 @@ def train(data_settings, model_settings, train_settings):
     test_dataloader = DataLoader(test_dataset, batch_size=data_settings['batch_size'], shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=data_settings['batch_size'], shuffle=False)
 
-    # print('HELP ME', dialogdata.len_voc_keys)
     my_lstm = SentimentLSTM(vocab_senti_size=dialogdata.len_voc_keys, embedding_dim=model_settings['embedding_dim'],
                             output_size=dialogdata.output_size, lstm_hidden_dim=model_settings['lstm_hidden_dim'], hidden_dim=model_settings['hidden_dim'],
                             hidden_dim2=model_settings['hidden_dim2'],n_layers=model_settings['n_layers'],
@@ -70,9 +97,13 @@ def train(data_settings, model_settings, train_settings):
             loss.backward()
             optimizer.step()
             total_loss+=loss
-        # logger.log({'train_loss': total_loss/len(train_dataloader)})
+        
         logger.log({'train_loss': total_loss/len(train_dataloader)})
         print('Epoch:{}, Train Loss:{}'.format(epoch, total_loss/len(train_dataloader)))
+        print(torch.cuda.memory_summary(device=None, abbreviated=False))
+        evaluate(logger,data_settings,my_lstm,train_dataloader)
+        evaluate(logger,data_settings,my_lstm,test_dataloader)
+        evaluate(logger,data_settings,my_lstm,val_dataloader)
     return
 
 # def calculate_metrics(logger, data_settings, model):

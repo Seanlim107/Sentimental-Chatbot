@@ -97,7 +97,7 @@ class SentimentLSTM(nn.Module):
     def forward(self, x):
         # print(x)
         out_embed = self.embedding(x.long())
-        print(out_embed.shape)
+        # print(out_embed.shape)
         # print(out_embed)
         out_lstm, (h_t,o_t) = self.lstm(out_embed)
         # print(h_t)
