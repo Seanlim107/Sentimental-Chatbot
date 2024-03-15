@@ -53,6 +53,7 @@ class DialogData(data.Dataset):
             for (dialog_line, emotion_line) in zip(dialog_file, emotion_file):
                 dialog = dialog_line.decode().split('__eou__')[:-1]
                 emotion = emotion_line.decode().split(" ")[:-1]
+                emotion = [int(x) for x in emotion]
                 dialog_list.append(dialog)
                 emotion_list.append(emotion)
         
@@ -168,5 +169,6 @@ class DialogData(data.Dataset):
         return X, y
     
     
-dailydialog = DialogData(max_seq = 10, voc_init_cache=False)
-# print(dailydialog.__getitem__(0))
+# dailydialog = DialogData(max_seq = 10, voc_init_cache=False)
+# # print(dailydialog.sentiment_sentences_df['emotion'].head())
+# X,y = dailydialog.prepare_dataloader()
