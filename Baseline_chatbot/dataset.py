@@ -15,23 +15,30 @@ import re
 import sentencepiece as spm
 import ast
 
+dirpath = os.path.dirname(os.path.realpath(__file__))
 
 class MoviePhrasesData(data.Dataset):
 
     # voc: vocabulary, word:idx
     # all dialogues:
     def __init__(self, max_seq_len=15, voc_init=False):
-
+        
+        convpath = os.path.join(dirpath, "Filtered Datasets", "filtered_movie_conversations.tsv")
+        linepath = os.path.join(dirpath, "Filtered Datasets", "filtered_movie_lines.tsv")
         self.movies_data = pd.read_csv(
-            os.path.join("Filtered Datasets", "filtered_movie_conversations.tsv"),
+            convpath,
             sep="\t",
         )  # reads the tsv movie conversations file
 
+        self.bos_token = "<s>"
+        self.eos_token = "</s>"
+        self.pad_token = "<pad>"
+        
         # convert the string of line ids to a list of line ids ["L598", "L599", "L600", "L601"]
         self.movies_data['lines'] = self.movies_data['lines'].apply(lambda x: ast.literal_eval(x))
 
         self.lines_data = pd.read_csv(
-            os.path.join("Filtered Datasets", "filtered_movie_lines.tsv"),
+            os.path.join(linepath),
             sep="\t",
         )
         # reads the tsv movie_lines file
@@ -39,7 +46,7 @@ class MoviePhrasesData(data.Dataset):
         self.max_seq_len = max_seq_len
 
         if voc_init:
-            self.voc = self.train_tokenizer()
+            self.tokenizer = self.train_tokenizer()
         else:
             self.load_tokenizer()
         
@@ -59,7 +66,7 @@ class MoviePhrasesData(data.Dataset):
     def load_tokenizer(self):
         # Load the tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
-            os.path.join("GRU_tokenizer"))
+            os.path.join(dirpath, "GRU_tokenizer"))
     
     def train_tokenizer(
         self, vocab_size=18000
@@ -93,7 +100,7 @@ class MoviePhrasesData(data.Dataset):
         tokenizer.add_special_tokens(special_tokens_dict)
         self.tokenizer = tokenizer
 
-        self.tokenizer.save_pretrained(os.path.join("GRU_tokenizer"))
+        self.tokenizer.save_pretrained(os.path.join(dirpath, "GRU_tokenizer"))
 
     def load_dialogue_text(self, dialogue):
         """
@@ -131,7 +138,7 @@ class MoviePhrasesData(data.Dataset):
             format_sentence = [self.tokenizer.bos_token_id] + tokenized_sentence + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id] * (
                 self.max_seq_len - len(tokenized_sentence) - 2
             )
-        return torch.Tensor(format_sentence)
+        return torch.tensor(format_sentence)
 
     def load_dialogue(self, dialogue):
         """
@@ -144,14 +151,23 @@ class MoviePhrasesData(data.Dataset):
         """
         lines_dict = self.load_dialogue_text(dialogue)
         dict_len = len(lines_dict)
-        all_inputs = torch.zeros(dict_len, self.max_seq_len, dtype=torch.long)
-        all_outputs = torch.zeros(dict_len, self.max_seq_len, dtype=torch.long)
+        all_inputs = []
+        all_outputs = []
+        # print(lines_dict.items())
         for idx, (line, next_line) in enumerate(lines_dict.items()):
             tokenized_line = self.tokenizer.encode(line)
             tokenized_next_line = self.tokenizer.encode(next_line)
-            all_inputs[idx] = self.trim_or_pad_sentence(tokenized_line)
-            all_outputs[idx] = self.trim_or_pad_sentence(tokenized_next_line)
-        return all_inputs, all_outputs
+            # print('tokenized line', tokenized_line)
+            # print('tokenized next line', tokenized_next_line)
+            all_inputs.append(self.trim_or_pad_sentence(tokenized_line))
+            all_outputs.append(self.trim_or_pad_sentence(tokenized_next_line))
+
+        all_inputs = torch.stack(all_inputs)
+        all_outputs = torch.stack(all_outputs)
+        # print(all_inputs.size())
+        # print(all_outputs.size())
+        final_tuple = (all_inputs, all_outputs)
+        return final_tuple
 
     # number of dialogues, 83097
     def __len__(self):
@@ -179,15 +195,15 @@ for i in tqdm(range(len(dataset))):
 -> with the new dataset this gives no error
 """
 
- """
- EXAMPLE TO ENCODE BATCHES!
- 
- encoded_batch = transformer_tokenizer.encode_batch(
-    ["Your first sentence.", "Your second, much longer, sentence."],
-    padding=True,  # Enable padding
-    max_length=10,  # Specify the desired maximum length
-    truncation=True,  # Enable truncation to max_length
-    return_tensors="pt"  # Return PyTorch tensors
+"""
+EXAMPLE TO ENCODE BATCHES!
+
+encoded_batch = transformer_tokenizer.encode_batch(
+["Your first sentence.", "Your second, much longer, sentence."],
+padding=True,  # Enable padding
+max_length=10,  # Specify the desired maximum length
+truncation=True,  # Enable truncation to max_length
+return_tensors="pt"  # Return PyTorch tensors
 )"""
 
 """
@@ -195,3 +211,22 @@ EXAMPLE TO ENCODE SINGLE SENTENCE!
 inputs = tokenizer("Hello, world!", padding=True, truncation=True, return_tensors="pt")
 
 """
+
+'''Debugging'''
+# from torch.utils.data import TensorDataset, DataLoader, random_split
+# moviehrasesdata = MoviePhrasesData()
+    
+# data_len = len(moviehrasesdata)
+# train_len = int(0.8*data_len)
+# test_len =  int((data_len - train_len)/2)
+# val_len = data_len - train_len - test_len
+
+# train_dataset, test_dataset, val_dataset = random_split(moviehrasesdata, [train_len, test_len, val_len])
+
+# train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False)
+# test_train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False)
+# test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+# val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+
+# for id, (idx, (prompt,reply)) in enumerate(train_dataloader):
+#     print(prompt.size())

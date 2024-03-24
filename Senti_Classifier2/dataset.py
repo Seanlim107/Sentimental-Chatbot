@@ -14,6 +14,7 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 from collections import Counter, OrderedDict
 import re
 from torch.utils.data import Dataset
+import numpy as np
 
 # nltk.download('wordnet')
 # nltk.download('punkt')
@@ -38,7 +39,6 @@ class DialogData(data.Dataset):
         self.stopwords = stopwords.words('english')
         self.voc_dict = OrderedDict()
         self.vocab_senti = []
-        self.output_size = None
         self.X = []
         self.y = []
         
@@ -58,14 +58,29 @@ class DialogData(data.Dataset):
                 emotion_list.append(emotion)
         
         self.dialog_df = pd.DataFrame(list(zip(dialog_list, emotion_list)),columns=['dialog','emotion'])
-        self.output_size = 7
+        self.output_size = 3
 
         #dataset for sentiment analysis
         self.sentiment_sentences_df = self.dialog_df.copy()
         # print(self.sentiment_sentences_df[self.sentiment_sentences_df.index.duplicated()])
         self.sentiment_sentences_df = self.sentiment_sentences_df.apply(pd.Series.explode, axis=0, ignore_index=True)
+        self.sentiment_sentences_df['length'] = [len(word_tokenize(re.sub('\W+', ' ', self.sentiment_sentences_df['dialog'][x]))) for x in range(len(self.sentiment_sentences_df))]
+        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([0]), "emotion"] = 7
+        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([1,2,3,5]), "emotion"] = 0
+        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([4,6]), "emotion"] = 2
+        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([7]), "emotion"] = 1
+        len_pos=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==2]))
+        len_neg=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==0]))
+        len_neu=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==1]))
         
-        # print(len(self.sentiment_sentences_df))
+        self.sentiment_sentences_df_tofilter = self.sentiment_sentences_df[self.sentiment_sentences_df['emotion'] == 1]
+        # print(len(self.sentiment_sentences_df_tofilter))
+        np.random.seed(42)
+        index_tofilter = np.random.choice(self.sentiment_sentences_df_tofilter.index,(len_neu-len_pos-len_neg), replace=False)
+        
+        df_modified = self.sentiment_sentences_df.drop(index_tofilter)
+        self.sentiment_sentences_df = df_modified
+        # print(len(df_modified))
         
         # Referencing code obtained from INM706 Lab 4
         if voc_init_cache:
@@ -170,5 +185,5 @@ class DialogData(data.Dataset):
     
     
 # dailydialog = DialogData(max_seq = 10, voc_init_cache=False)
-# # print(dailydialog.sentiment_sentences_df['emotion'].head())
+# print(dailydialog.sentiment_sentences_df.describe())
 # X,y = dailydialog.prepare_dataloader()

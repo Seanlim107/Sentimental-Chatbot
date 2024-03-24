@@ -2,16 +2,16 @@ data:
   max_seq: 10
   train_size: 0.8
   batch_size: 16
-  num_output: 7
+  num_output: 3
 
 model:
   embedding_dim: 512
   lstm_hidden_dim: 512
-  hidden_dim: 512
-  hidden_dim2: 256
+  hidden_dim: 256
+  hidden_dim2: 128
   n_layers: 3
   drop_prob: 0.5
   
 train:
     epochs: 100
-    learning_rate: 0.001
+    learning_rate: 0.0001
