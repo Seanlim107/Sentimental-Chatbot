@@ -100,6 +100,9 @@ def train(data_settings, model_settings, train_settings):
     # Load existing model if it exists
     if os.path.exists(filename):
         ckpt_epoch, max_test_acc, max_valid_acc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, filename)
+        print(f'Checkpoint detected, starting from epoch {ckpt_epoch}')
+    else:
+        print('No checkpoint, starting from scratch')
     
     for epoch in range(ckpt_epoch, train_settings['epochs']):
         total_loss = 0

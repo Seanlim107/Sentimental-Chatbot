@@ -1,5 +1,7 @@
 .venv/
 __pycache__/
 wandb/
-.vscode/
 ```
+
+Baseline_chatbot/model_and_optimizer_2.pth
+Baseline_chatbot/model_and_optimizer_2_Copy.pth

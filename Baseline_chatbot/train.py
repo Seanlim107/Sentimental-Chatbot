@@ -48,8 +48,38 @@ def train(data_settings, model_settings, train_settings):
         pass
     else:
         decoder = DecoderGRU(vocab_size=len(voc), embedding_size=model_settings['embedding_dim'], hidden_size=model_settings['hidden_dim'])
+    
     encoder = encoder.to(device)
     decoder = decoder.to(device)
+    
+    if train_settings['optimizer']==1:
+        optimizer = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=train_settings['lr'])
+        filename = "model_and_optimizer_1.pth"
+    elif train_settings['optimizer']==2:
+        encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=train_settings['lr'])
+        decoder_optimizer = decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=train_settings['lr']*train_settings['decay_ratio'])
+        filename = "model_and_optimizer_2.pth"
+        
+    # 'encoder_state_dict': encoder.state_dict(),
+    #             'decoder_state_dict': decoder.state_dict(),
+    #             'encoder_optimizer_state_dict': encoder_optimizer.state_dict(),
+    #             'decoder_optimizer_state_dict': decoder_optimizer.state_dict(),
+    if os.path.exists(filename):
+        ckpt = torch.load(filename, map_location=device)
+        encoder.load_state_dict(ckpt['encoder_state_dict'])
+        decoder.load_state_dict(ckpt['decoder_state_dict'])
+        
+        if train_settings['optimizer']==1:
+            optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+        else:
+            encoder_optimizer.load_state_dict(ckpt['encoder_optimizer_state_dict'])
+            decoder_optimizer.load_state_dict(ckpt['decoder_optimizer_state_dict'])
+        print(f'Checkpoint detected, starting from checkpoint')
+    else:
+        print('No checkpoint, starting from scratch')
+    # print(encoder)
+    # encoder = encoder.to(device)
+    # decoder = decoder.to(device)
     
     encoder.train()
     decoder.train()
@@ -58,11 +88,7 @@ def train(data_settings, model_settings, train_settings):
     
     total_epochs = train_settings['epochs']
     
-    if train_settings['optimizer']==1:
-        optimizer = torch.optim.Adam(list(encoder.parameters()) + list(decoder.parameters()), lr=train_settings['lr'])
-    elif train_settings['optimizer']==2:
-        encoder_optimizer = torch.optim.Adam(encoder.parameters(), lr=train_settings['lr'])
-        decoder_optimizer = decoder_optimizer = torch.optim.Adam(decoder.parameters(), lr=train_settings['lr'] * decoder_learning_ratio)
+    
         
     num_seqs = data_settings['num_seq']
     current_batch = 0
@@ -74,6 +100,8 @@ def train(data_settings, model_settings, train_settings):
         epoch_loss = 0
         processed_total_batches = 0
         for id, (idx, (prompt,reply)) in enumerate(train_dataloader):
+            pred_response=[]
+            prompt_list=[]
             # print(prompt)
             # print(reply)
             if not current_batch:
@@ -127,11 +155,21 @@ def train(data_settings, model_settings, train_settings):
                     output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder, output_encoder)
                 else:
                     output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder)
+                
                 top_k_predict = output_decoder.topk(1).indices
                 targets = true_response[0, :, idx + 1]
                 # loss from the predicted vs true tokens
+                
                 loss = loss_function(output_decoder.squeeze_(0), targets)
                 loss_dialogue += loss
+                
+                # print('Prompt: ')
+                # print(moviephrasesdata.tokenizer.decode(prompt[0][0]))
+                # prompt_list.append([moviephrasesdata.tokenizer.decode(x[0]) for x in prompt])
+                # pred_response.append(moviephrasesdata.tokenizer.decode(torch.argmax(output_decoder.squeeze(0))))
+                # print(prompt_list)
+                # print(pred_response)
+            
                 
             loss_dialogue = loss_dialogue / true_response.size()[2]
             # add dialogue loss to the batch loss
@@ -150,24 +188,31 @@ def train(data_settings, model_settings, train_settings):
                     encoder_optimizer.step()
                     decoder_optimizer.step()
                     
-        epoch_loss = epoch_loss / processed_total_batches
-        logger.log({"epoch_loss": epoch_loss})
-        print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}, total batches processed = {2:d}'.format(epoch_loss,
-                                                                                                            total_phrase_pairs,
-                                                                                                            processed_total_batches))
+        # print(f'Prompt: {prompt}')
+        # print(f'Response: {pred_response}')
+        
         if(train_settings['optimizer']==1):
             torch.save({
-                'encoder_state_dict': encoder.state_dict(),
-                'decoder_state_dict': decoder.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }, 'model_and_optimizer_1.pth')
+            'encoder_state_dict': encoder.state_dict(),
+            'decoder_state_dict': decoder.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'epochs': epoch,
+        }, 'model_and_optimizer_1.pth')
         else:
             torch.save({
                 'encoder_state_dict': encoder.state_dict(),
                 'decoder_state_dict': decoder.state_dict(),
                 'encoder_optimizer_state_dict': encoder_optimizer.state_dict(),
                 'decoder_optimizer_state_dict': decoder_optimizer.state_dict(),
+                'epochs': epoch,
             }, 'model_and_optimizer_2.pth')
+                    
+        epoch_loss = epoch_loss / processed_total_batches
+        logger.log({"epoch_loss": epoch_loss})
+        print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}, total batches processed = {2:d}'.format(epoch_loss,
+                                                                                                            total_phrase_pairs,
+                                                                                                            processed_total_batches))
+        
             
     return
 
