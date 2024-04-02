@@ -13,6 +13,5 @@ train:
   train_size: 0.8
   epochs: 30
   batch_size: 1
-  optimizer: 2
+  optimizer: 2          # 1 = same optimizer, 2 = different optimizer (for encoder and decoder)
   decay_ratio: 5.0
-
