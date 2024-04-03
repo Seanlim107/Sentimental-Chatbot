@@ -152,9 +152,9 @@ def train(data_settings, model_settings, train_settings):
                 decoder_input = top_k_predict.view(-1, batch_size)
 
                 if model_settings['use_attention']:
-                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder, output_encoder)
+                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder, output_encoder)
                 else:
-                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder)
+                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder)
                 
                 top_k_predict = output_decoder.topk(1).indices
                 targets = true_response[0, :, idx + 1]
