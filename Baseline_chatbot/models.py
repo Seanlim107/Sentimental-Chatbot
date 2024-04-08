@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import os, sys
+import math
 
 
 device = torch.device("cpu")
@@ -66,3 +66,52 @@ class DecoderGRU(nn.Module):
         o = F.relu(self.out(o))
         o = self.out2(o)
         return o, h
+
+class Attention(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Attention, self).__init__()
+        self.output_size = output_size
+        self.prompt_layer = nn.Linear(in_features=input_size, out_features=output_size)
+        self.key_layer = nn.Linear(in_features=input_size, out_features=output_size)
+        self.value_layer = nn.Linear(in_features=input_size, out_features=output_size)
+        self.softmax = nn.Softmax()
+        
+    def forward(self, x):
+        out_prompt = F.relu(self.prompt_layer(x))
+        out_key = F.relu(self.key_layer(x))
+        out_value = F.relu(self.value_layer(x))
+        
+        out_q_k = torch.div(torch.bmm(out_prompt, out_key.transpose(1, 2)), math.sqrt(self.output_size))
+        softmax_q_k = self.softmax(out_q_k)
+        out_combine = torch.bmm(softmax_q_k, out_value)
+        
+        return out_combine
+    
+class DecoderGRU_Attention(nn.Module):
+    def __init__(self, vocab_size, hidden_size, embedding_size, num_layers, feature_size):
+        # super(DecoderGRU_Attention, self).__init__(vocab_size=vocab_size, hidden_size=hidden_size, embedding_size=embedding_size, num_layers=num_layers, feature_size=feature_size)
+        super(DecoderGRU_Attention, self).__init__()
+        self.hidden_size = hidden_size
+        self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.relu = nn.ReLU(inplace=False)
+        self.gru = nn.GRU(embedding_size, hidden_size, batch_first=False)
+        self.attention = Attention(hidden_size, feature_size)  # Using your SelfAttention module
+        self.out = nn.Linear(hidden_size + feature_size, feature_size)  # Adjust output size based on your requirements
+        self.out2 = nn.Linear(feature_size, vocab_size)
+        self.attention = Attention(hidden_size, feature_size)
+        
+    def forward(self,x,hidden,encoder_outputs):
+        x=self.embedding(x)
+        output_x, hidden_x = self.gru(x,hidden)
+        
+        contexte = self.attention(output_x)
+        
+        combined_decoder_context = torch.cat((output_x, contexte), dim=-1)
+        # print(combined_decoder_context.shape)
+        
+        output = F.relu(self.out(combined_decoder_context))
+        output = self.out2(output)
+        
+        return output,hidden_x
+# test = DecoderGRU_Attention(18000, 64, 128)
+# print(test)

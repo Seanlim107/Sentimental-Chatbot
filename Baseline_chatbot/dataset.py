@@ -41,16 +41,21 @@ class MoviePhrasesData(data.Dataset):
             os.path.join(linepath),
             sep="\t",
         )
+        # print(self.lines_data)
         # reads the tsv movie_lines file
 
         self.max_seq_len = max_seq_len
 
         if voc_init:
             self.tokenizer = self.train_tokenizer()
+            self.load_tokenizer()
+        
         else:
             self.load_tokenizer()
         
         self.vocab = self.tokenizer.vocab  #unsorted list
+        self.vocab = sorted(self.vocab)
+        # print(self.vocab)
 
     # def _create_raw_text_file(self):
     #     movie_lines = self.lines_data["line"]
@@ -213,20 +218,3 @@ inputs = tokenizer("Hello, world!", padding=True, truncation=True, return_tensor
 """
 
 '''Debugging'''
-# from torch.utils.data import TensorDataset, DataLoader, random_split
-# moviehrasesdata = MoviePhrasesData()
-    
-# data_len = len(moviehrasesdata)
-# train_len = int(0.8*data_len)
-# test_len =  int((data_len - train_len)/2)
-# val_len = data_len - train_len - test_len
-
-# train_dataset, test_dataset, val_dataset = random_split(moviehrasesdata, [train_len, test_len, val_len])
-
-# train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False)
-# test_train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False)
-# test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-# val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-
-# for id, (idx, (prompt,reply)) in enumerate(train_dataloader):
-#     print(prompt.size())

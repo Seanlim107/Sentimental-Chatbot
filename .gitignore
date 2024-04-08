@@ -5,3 +5,5 @@ wandb/
 
 Baseline_chatbot/model_and_optimizer_2.pth
 Baseline_chatbot/model_and_optimizer_2_Copy.pth
+Baseline_chatbot/model_and_optimizer_2_FAIL.pth
+Baseline_chatbot/helpme.code-workspace
