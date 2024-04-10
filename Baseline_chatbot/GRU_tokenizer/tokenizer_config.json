@@ -8,7 +8,7 @@
       "single_word": false,
       "special": true
     },
-    "18000": {
+    "40000": {
       "content": "<s>",
       "lstrip": false,
       "normalized": false,
@@ -16,7 +16,7 @@
       "single_word": false,
       "special": true
     },
-    "18001": {
+    "40001": {
       "content": "</s>",
       "lstrip": false,
       "normalized": false,
@@ -24,7 +24,7 @@
       "single_word": false,
       "special": true
     },
-    "18002": {
+    "40002": {
       "content": "<pad>",
       "lstrip": false,
       "normalized": false,

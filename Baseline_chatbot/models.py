@@ -18,8 +18,10 @@ class EncoderGRU(nn.Module):
     # seq2seq model: embedding_size = hidden_size
     def __init__(self, vocab_size, embedding_size, hidden_size, num_layers=1):
         super(EncoderGRU, self).__init__()
+        self.hidden_size = hidden_size
+        self.embedding_size = embedding_size
         self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.gru = nn.GRU(embedding_size, hidden_size, num_layers, batch_first=False)
+        self.gru = nn.GRU(embedding_size, hidden_size, num_layers, batch_first=True)
         # init weights
         total_weights = 0
         for n, p in self.state_dict().items():
@@ -28,12 +30,19 @@ class EncoderGRU(nn.Module):
 
     # this assumes input dialogue of dimensions (1 x num_seq x seq_length)
     # get rid of the first dimension
-    def forward(self, input_dialogue):
+    def forward(self, input_dialogue, lengths, hidden=None):
+        
         x = self.embedding(input_dialogue)
-        x = x.view(x.size()[1], x.size()[0], -1)
-        output, hidden = self.gru(x)
+        # x = x.reshape(x.shape[1],x.shape[2],x.shape[0])
+        x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        # print(x)
+        # x = x.view(x.size()[1], x.size()[0], -1)
+        output, hidden = self.gru(x, hidden)
+        # print(output.data.shape)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
         # output the whole sequence + last hidden state
-        return output, hidden
+        # print(outputs[:, :, :self.hidden_size])
+        return outputs, hidden
 
 
 # decode the 'reply'
@@ -99,6 +108,10 @@ class DecoderGRU_Attention(nn.Module):
         self.out = nn.Linear(hidden_size + feature_size, feature_size)  # Adjust output size based on your requirements
         self.out2 = nn.Linear(feature_size, vocab_size)
         self.attention = Attention(hidden_size, feature_size)
+        total_weights = 0
+        for n, p in self.state_dict().items():
+            total_weights += p.numel()
+        print("Decoder has a total of {0:d} parameters".format(total_weights))
         
     def forward(self,x,hidden,encoder_outputs):
         x=self.embedding(x)

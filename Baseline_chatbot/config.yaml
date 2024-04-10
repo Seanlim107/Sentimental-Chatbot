@@ -1,5 +1,5 @@
 data:
-  max_seq: 10
+  max_seq: 8
   train_size: 0.8
   batch_size: 1
 model: 
@@ -12,8 +12,8 @@ model:
 train:
   lr: 0.001
   train_size: 0.8
-  epochs: 30
+  epochs: 10
   optimizer: 2         # 1 = same optimizer, 2 = different optimizer (for encoder and decoder)
-  decoder_decay_ratio: 5.0
+  decoder_decay_ratio: 0.005
   decay_ratio: 0.001
-  num_seq_process: 100
+  num_seq_process: 10

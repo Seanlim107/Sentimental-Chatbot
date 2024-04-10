@@ -91,16 +91,17 @@ def train(data_settings, model_settings, train_settings):
     
     total_epochs = train_settings['epochs']
         
-    num_seqs = train_settings['num_seq_process']
+    num_batches = data_settings['batch_size']
     current_batch = 0
     total_phrase_pairs = 0
     loss_function = nn.CrossEntropyLoss()
+    # loss_function = nn.KLDivLoss(reduction='batchmean')
     
     for epoch in range(total_epochs):
         print(f'Epoch {epoch}')
         epoch_loss = 0
         processed_total_batches = 0
-        for id, (idx, (prompt,reply)) in enumerate(train_dataloader):
+        for id, ((prompt_len, reply_len), (prompt,reply)) in enumerate(train_dataloader):
             if not current_batch:
                 total_phrase_pairs = 0
                 loss_batch = 0
@@ -121,24 +122,31 @@ def train(data_settings, model_settings, train_settings):
             total_phrase_pairs += batch_size
             
             data = prompt
-            data = data.view(-1, batch_size, seq_length)[0]
-
-            output_encoder, hidden_encoder = encoder(data)
+            data = data.view(-1, batch_size, seq_length).squeeze(0)
+            # print(data)
+            # print(prompt_len)
+            batch_size_to_encoder = torch.tensor(prompt_len, dtype=torch.int64).to('cpu')
+            # print(prompt_len)
+            output_encoder, hidden_encoder = encoder(data, batch_size_to_encoder)
 
             true_response = reply
 
-            decoder_input = torch.LongTensor([[moviephrasesdata.vocab.index(moviephrasesdata.bos_token) for _ in range(batch_size)]])
+            decoder_input = torch.LongTensor([[moviephrasesdata.tokenizer.encode(moviephrasesdata.bos_token)[0] for _ in range(batch_size)]])
+            # print(decoder_input)
             decoder_input = decoder_input.to(device)
             
             hidden_encoder = hidden_encoder[-1, :, :].unsqueeze(0)
-
+            
+            # print(hidden_encoder.shape)
+            hidden_decoder = hidden_encoder
             if model_settings['use_attention']:
-                output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder, output_encoder)
+                output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder, output_encoder)
             else:
-                output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder)
-
+                output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder)
+            # print(output_decoder.shape)
+            # print(hidden_decoder.shape)
             top_k_predict = output_decoder.topk(1).indices
-            # print(top_k_predict)
+            # print(output_decoder.topk(5).indices)
             targets = true_response[0, :, 1]
             # print(targets)
             targets = targets.to(device)
@@ -146,10 +154,11 @@ def train(data_settings, model_settings, train_settings):
             loss = loss_function(output_decoder.squeeze(0), targets)
             loss_dialogue = 0
             loss_dialogue += loss
-            
+            hidden_decoder = hidden_encoder
             for idx in range(1, true_response.size()[2] - 1):
                 decoder_input = top_k_predict.view(-1, batch_size)
                 # print('Predicted Response:', moviephrasesdata.tokenizer.decode((decoder_input.squeeze(0))))
+                
                 if model_settings['use_attention']:
                     output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder, output_encoder)
                 else:
@@ -158,10 +167,12 @@ def train(data_settings, model_settings, train_settings):
                 # print(output_decoder)
                 # print(output_decoder.topk(5).indices)
                 top_k_predict = output_decoder.topk(1).indices
-                
+
                 targets = true_response[0, :, idx + 1]
                 # loss from the predicted vs true tokens
-                loss = loss_function(output_decoder.squeeze_(0), targets)
+                # print(output_decoder.squeeze(0))
+                # print(targets)
+                loss = loss_function(output_decoder.squeeze(0), targets)
                 loss_dialogue += loss
                 
                 
@@ -170,9 +181,9 @@ def train(data_settings, model_settings, train_settings):
             # add dialogue loss to the batch loss
             loss_batch += loss_dialogue
             
-            if not current_batch % num_seqs:
+            if not current_batch % num_batches:
                 current_batch = 0
-                loss_batch = loss_batch / num_seqs
+                loss_batch = loss_batch / num_batches
                 epoch_loss += loss_batch.item()
                 processed_total_batches += 1
                 # print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}'.format(loss_batch, total_phrase_pairs))
@@ -183,6 +194,14 @@ def train(data_settings, model_settings, train_settings):
                 else:
                     encoder_optimizer.step()
                     decoder_optimizer.step()
+                    
+                #________________________________________________________TURN OFF FOR DEBUGGING__________________________________________________________________
+                epoch_loss = epoch_loss / processed_total_batches
+                # logger.log({"epoch_loss": epoch_loss})
+                print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}, total batches processed = {2:d}'.format(epoch_loss,
+                                                                                                                    total_phrase_pairs,
+                                                                                                                    processed_total_batches))
+                # ________________________________________________________TURN OFF FOR DEBUGGING__________________________________________________________________
                     
         # print(f'Prompt: {prompt}')
         # print(f'Response: {pred_response}')
@@ -205,13 +224,7 @@ def train(data_settings, model_settings, train_settings):
             
         # print(chat("How is life my boy"))
                     
-        #________________________________________________________TURN OFF FOR DEBUGGING__________________________________________________________________
-        # epoch_loss = epoch_loss / processed_total_batches
-        # logger.log({"epoch_loss": epoch_loss})
-        # print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}, total batches processed = {2:d}'.format(epoch_loss,
-        #                                                                                                     total_phrase_pairs,
-        #                                                                                                     processed_total_batches))
-        # ________________________________________________________TURN OFF FOR DEBUGGING__________________________________________________________________
+        
         
             
     return

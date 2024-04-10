@@ -54,7 +54,7 @@ class MoviePhrasesData(data.Dataset):
             self.load_tokenizer()
         
         self.vocab = self.tokenizer.vocab  #unsorted list
-        self.vocab = sorted(self.vocab)
+        self.vocab = list(self.vocab)
         # print(self.vocab)
 
     # def _create_raw_text_file(self):
@@ -74,7 +74,7 @@ class MoviePhrasesData(data.Dataset):
             os.path.join(dirpath, "GRU_tokenizer"))
     
     def train_tokenizer(
-        self, vocab_size=18000
+        self, vocab_size=40000
     ):
         """
         Trains a SentencePiece tokenizer on the text of Cornell's dataset.
@@ -130,19 +130,26 @@ class MoviePhrasesData(data.Dataset):
             lines_dict[line_text["line"].iloc[0]] = next_line_text["line"].iloc[0]
         return lines_dict
     
-    def trim_or_pad_sentence(self, tokenized_sentence):
+    def trim_or_pad_sentence(self, tokenized_sentence, padded=True):
         """
         Trims or pads a sentence to max_seq_len.
         Tokenized_sentence is a list of token ids (integers).
         Adds bos and eos tokens to the sentence (which tok doesn't do by default)
         -> that's why they're trimmed at max_seq_len - 2
         """
-        if len(tokenized_sentence) > self.max_seq_len - 2:
-            format_sentence = [self.tokenizer.bos_token_id] + tokenized_sentence[: self.max_seq_len - 2] + [self.tokenizer.eos_token_id]
+        if padded:
+            if len(tokenized_sentence) > self.max_seq_len:
+                format_sentence = tokenized_sentence[: self.max_seq_len] + [self.tokenizer.eos_token_id]
+            else:
+                format_sentence = tokenized_sentence + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id] * (
+                    self.max_seq_len - len(tokenized_sentence)
+                )
         else:
-            format_sentence = [self.tokenizer.bos_token_id] + tokenized_sentence + [self.tokenizer.eos_token_id] + [self.tokenizer.pad_token_id] * (
-                self.max_seq_len - len(tokenized_sentence) - 2
-            )
+            if len(tokenized_sentence) > self.max_seq_len:
+                format_sentence = [self.tokenizer.bos_token_id] + tokenized_sentence[: self.max_seq_len] + [self.tokenizer.eos_token_id]
+            else:
+                format_sentence = [self.tokenizer.bos_token_id] + tokenized_sentence + [self.tokenizer.eos_token_id]
+
         return torch.tensor(format_sentence)
 
     def load_dialogue(self, dialogue):
@@ -158,21 +165,31 @@ class MoviePhrasesData(data.Dataset):
         dict_len = len(lines_dict)
         all_inputs = []
         all_outputs = []
+        all_inputs_len = []
+        all_outputs_len = []
         # print(lines_dict.items())
         for idx, (line, next_line) in enumerate(lines_dict.items()):
             tokenized_line = self.tokenizer.encode(line)
             tokenized_next_line = self.tokenizer.encode(next_line)
             # print('tokenized line', tokenized_line)
             # print('tokenized next line', tokenized_next_line)
-            all_inputs.append(self.trim_or_pad_sentence(tokenized_line))
-            all_outputs.append(self.trim_or_pad_sentence(tokenized_next_line))
+            len_line = min(len(tokenized_line), self.max_seq_len) 
+            len_line_next = min(len(tokenized_next_line), self.max_seq_len)
+            all_inputs_len.append(len_line)
+            all_outputs_len.append(len_line_next)
+            # all_inputs.append(tokenized_line)
+            # all_outputs.append(tokenized_next_line)
+            all_inputs.append(self.trim_or_pad_sentence(tokenized_line, padded=True))
+            all_outputs.append(self.trim_or_pad_sentence(tokenized_next_line, padded=True))
 
+        # print(all_inputs)
         all_inputs = torch.stack(all_inputs)
         all_outputs = torch.stack(all_outputs)
         # print(all_inputs.size())
         # print(all_outputs.size())
         final_tuple = (all_inputs, all_outputs)
-        return final_tuple
+        final_tuple_lengths = (all_inputs_len, all_outputs_len)
+        return final_tuple, final_tuple_lengths
 
     # number of dialogues, 83097
     def __len__(self):
@@ -185,8 +202,9 @@ class MoviePhrasesData(data.Dataset):
     # output: tuple of two torch tensor stacks dimensions ((K-1)x max_seq_len)
     def __getitem__(self, idx):
         self.dialogue = self.movies_data.iloc[idx]  # data for that row in movie_conversations.tsv
-        self.phrases = self.load_dialogue(self.dialogue)  
-        return idx, self.phrases
+        self.phrases, self.phrases_lengths = self.load_dialogue(self.dialogue)  
+        # print(self.phrases)
+        return self.phrases_lengths, self.phrases
     # for every dialogue in the movie_conversations.tsv,
     # return the dialogue index and the tensors for (all_inputs, all_outputs) 
 

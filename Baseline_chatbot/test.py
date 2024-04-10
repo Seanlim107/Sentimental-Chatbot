@@ -4,7 +4,7 @@
 #%% 
 import torch
 import os
-from models import EncoderGRU, DecoderGRU
+from models import EncoderGRU, DecoderGRU, DecoderGRU_Attention
 from dataset import MoviePhrasesData
 from utils import read_settings
 
@@ -17,17 +17,18 @@ def chat(input_text: str):
     settings = read_settings("config.yaml")
     data_settings = settings.get('data', {})
     model_settings = settings.get('model', {})
+    length = len(input_text)
 
-    device = (torch.device("cuda") if not torch.cuda.is_available() else torch.device("cpu"))
+    device = (torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu"))
     # Load the checkpoint (specify the path accordingly)
     checkpoint = torch.load("model_and_optimizer_2.pth", map_location=device)
 
-    dataset = MoviePhrasesData(voc_init=False, max_seq_len=data_settings['max_seq'])
+    dataset = MoviePhrasesData(voc_init=True, max_seq_len=data_settings['max_seq'])
     voc = dataset.vocab
-
+    print(len(voc))
     # Initialize the models
     encoder = EncoderGRU(vocab_size=len(voc), embedding_size=model_settings['embedding_dim'], hidden_size=model_settings['hidden_dim']) 
-    decoder = DecoderGRU(vocab_size=len(voc), embedding_size=model_settings['embedding_dim'], hidden_size=model_settings['hidden_dim']) 
+    decoder = DecoderGRU_Attention(vocab_size=len(voc), embedding_size=model_settings['embedding_dim'], hidden_size=model_settings['hidden_dim'], num_layers=model_settings['num_layers'], feature_size=model_settings['feature_size']) 
     # Load the model states
     encoder.load_state_dict(checkpoint['encoder_state_dict'])
     decoder.load_state_dict(checkpoint['decoder_state_dict'])
