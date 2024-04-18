@@ -17,7 +17,7 @@ import ast
 
 dirpath = os.path.dirname(os.path.realpath(__file__))
 
-class MoviePhrasesData(data.Dataset):
+class MoviePhrasesDataAlt(data.Dataset):
 
     # voc: vocabulary, word:idx
     # all dialogues:
@@ -86,7 +86,7 @@ class MoviePhrasesData(data.Dataset):
         movie_lines = self.lines_data["line"]
         cleaned_movies = movie_lines.dropna()
         cleaned_movies_lines = cleaned_movies.tolist()  # list of all interventions
-
+        print(movie_lines)
         tokenizer = SentencePieceBPETokenizer()
         tokenizer.train_from_iterator(
             cleaned_movies_lines,

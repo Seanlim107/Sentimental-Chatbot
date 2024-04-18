@@ -1,0 +1,15 @@
+e205877d44ce7551989287af4f43729092dd648c
+Python 3.9.5
+cuda
+No backbone detected, training from scratch
+No checkpoint detected, starting from scratch
+Epoch:0, Train Loss:142.38229370117188
+Epoch:1, Train Loss:1.2479469776153564
+Epoch:2, Train Loss:1.241227626800537
+Epoch:3, Train Loss:1.1479498147964478
+Epoch:4, Train Loss:1.211539387702942
+Epoch:5, Train Loss:1.1926953792572021
+Epoch:6, Train Loss:1.1699633598327637
+Epoch:7, Train Loss:1.1475015878677368
+Epoch:8, Train Loss:1.146022081375122
+Epoch:9, Train Loss:1.131949543952942

@@ -21,25 +21,28 @@ class EncoderGRU(nn.Module):
         self.hidden_size = hidden_size
         self.embedding_size = embedding_size
         self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.gru = nn.GRU(embedding_size, hidden_size, num_layers, batch_first=True)
+        self.gru = nn.GRU(embedding_size, hidden_size, num_layers, batch_first=False)
+        self.dropout = nn.Dropout(p=0.5)
         # init weights
         total_weights = 0
-        for n, p in self.state_dict().items():
-            total_weights += p.numel()
-        print("Encoder has a total of {0:d} parameters".format(total_weights))
+        # for n, p in self.state_dict().items():
+        #     total_weights += p.numel()
+        # print("Encoder has a total of {0:d} parameters".format(total_weights))
 
     # this assumes input dialogue of dimensions (1 x num_seq x seq_length)
     # get rid of the first dimension
     def forward(self, input_dialogue, lengths, hidden=None):
         
         x = self.embedding(input_dialogue)
+        # x = self.dropout(x)
+        # print(x.shape)
         # x = x.reshape(x.shape[1],x.shape[2],x.shape[0])
-        x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        x = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=False, enforce_sorted=False)
         # print(x)
         # x = x.view(x.size()[1], x.size()[0], -1)
         output, hidden = self.gru(x, hidden)
         # print(output.data.shape)
-        outputs, _ = nn.utils.rnn.pad_packed_sequence(output, batch_first=True)
+        outputs, _ = nn.utils.rnn.pad_packed_sequence(output, batch_first=False)
         # output the whole sequence + last hidden state
         # print(outputs[:, :, :self.hidden_size])
         return outputs, hidden
@@ -96,18 +99,60 @@ class Attention(nn.Module):
         
         return out_combine
     
+class Attention_Luong(nn.Module):
+    def __init__(self, hidden_size, method='concat'):
+        super(Attention_Luong, self).__init__()
+        if method not in ['dot', 'general', 'concat']:
+            raise Exception('Invalid method occured')
+        self.method = method
+        if self.method not in ['dot', 'general', 'concat']:
+            raise ValueError(self.method, "is not an appropriate attention method.")
+        self.hidden_size = hidden_size
+        if self.method == 'general':
+            self.attn = nn.Linear(self.hidden_size, hidden_size)
+        elif self.method == 'concat':
+            self.attn = nn.Linear(self.hidden_size * 2, hidden_size)
+            self.v = nn.Parameter(torch.FloatTensor(hidden_size))
+
+    def dot_score(self, hidden, encoder_output):
+        return torch.sum(hidden * encoder_output, dim=2)
+
+    def general_score(self, hidden, encoder_output):
+        energy = self.attn(encoder_output)
+        return torch.sum(hidden * energy, dim=2)
+
+    def concat_score(self, hidden, encoder_output):
+        energy = self.attn(torch.cat((hidden.expand(encoder_output.size(0), -1, -1), encoder_output), 2)).tanh()
+        return torch.sum(self.v * energy, dim=2)
+
+    def forward(self, hidden, encoder_outputs):
+        # Calculate the attention weights (energies) based on the given method
+        if self.method == 'general':
+            attn_energies = self.general_score(hidden, encoder_outputs)
+        elif self.method == 'concat':
+            attn_energies = self.concat_score(hidden, encoder_outputs)
+        elif self.method == 'dot':
+            attn_energies = self.dot_score(hidden, encoder_outputs)
+
+        # Transpose max_length and batch_size dimensions
+        attn_energies = attn_energies.t()
+
+        # Return the softmax normalized probability scores (with added dimension)
+        return F.softmax(attn_energies, dim=1).unsqueeze(1)
+    
 class DecoderGRU_Attention(nn.Module):
-    def __init__(self, vocab_size, hidden_size, embedding_size, num_layers, feature_size):
+    def __init__(self, vocab_size, hidden_size, embedding_size, num_layers, feature_size, method_attention='concat', dropout=0.5):
         # super(DecoderGRU_Attention, self).__init__(vocab_size=vocab_size, hidden_size=hidden_size, embedding_size=embedding_size, num_layers=num_layers, feature_size=feature_size)
         super(DecoderGRU_Attention, self).__init__()
         self.hidden_size = hidden_size
         self.embedding = nn.Embedding(vocab_size, embedding_size)
+        self.dropout = nn.Dropout(dropout)
         self.relu = nn.ReLU(inplace=False)
-        self.gru = nn.GRU(embedding_size, hidden_size, batch_first=False)
-        self.attention = Attention(hidden_size, feature_size)  # Using your SelfAttention module
-        self.out = nn.Linear(hidden_size + feature_size, feature_size)  # Adjust output size based on your requirements
+        self.gru = nn.GRU(embedding_size, hidden_size, num_layers, dropout=(0 if num_layers == 1 else dropout), batch_first=False)
+        self.attention = Attention_Luong(hidden_size, method_attention)  # Using your SelfAttention module
+        self.out = nn.Linear(hidden_size + embedding_size, feature_size)  # Adjust output size based on your requirements
         self.out2 = nn.Linear(feature_size, vocab_size)
-        self.attention = Attention(hidden_size, feature_size)
+        
         total_weights = 0
         for n, p in self.state_dict().items():
             total_weights += p.numel()
@@ -115,16 +160,29 @@ class DecoderGRU_Attention(nn.Module):
         
     def forward(self,x,hidden,encoder_outputs):
         x=self.embedding(x)
+        # x = self.dropout(x)
         output_x, hidden_x = self.gru(x,hidden)
-        
-        contexte = self.attention(output_x)
-        
-        combined_decoder_context = torch.cat((output_x, contexte), dim=-1)
+
+        contexte = self.attention(output_x, encoder_outputs)
+        combined_decoder_context = contexte.bmm(encoder_outputs.transpose(0, 1))
+        output_x = output_x.squeeze(0)
+        combined_decoder_context = combined_decoder_context.squeeze(1)
+        concat_input = torch.cat((output_x, combined_decoder_context), 1)
+        temp_output = self.out(concat_input)
+        # temp_output = self.dropout(temp_output)
+        concat_output = torch.tanh(temp_output)
+        # Predict next word using Luong eq. 6
+        output = self.out2(concat_output)
+        # output = self.dropout(output)
+        output = F.softmax(output, dim=1)
+        # Return output and final hidden state
+        return output, hidden_x
+        # combined_decoder_context = torch.cat((output_x, contexte), dim=-1)
         # print(combined_decoder_context.shape)
         
-        output = F.relu(self.out(combined_decoder_context))
-        output = self.out2(output)
+        # output = F.relu(self.out(combined_decoder_context))
+        # output = self.out2(output)
         
-        return output,hidden_x
+        # return output,hidden_x
 # test = DecoderGRU_Attention(18000, 64, 128)
 # print(test)

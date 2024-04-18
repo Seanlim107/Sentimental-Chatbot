@@ -92,7 +92,7 @@ def train(data_settings, model_settings, train_settings):
     
     total_epochs = train_settings['epochs']
         
-    num_batches = train_settings['num_seq_process']
+    num_batches = data_settings['batch_size']
     current_batch = 0
     total_phrase_pairs = 0
     loss_function = nn.CrossEntropyLoss(ignore_index=moviephrasesdata.voc.index(moviephrasesdata.unk_token))
@@ -104,124 +104,119 @@ def train(data_settings, model_settings, train_settings):
         epoch_loss = 0
         processed_total_batches = 0
         for id, ((prompt_len, reply_len), (prompt,reply)) in enumerate(train_dataloader):
-            # print(prompt)
-            if(len(prompt_len[0])==0):
-                continue
-            for idx in range(len(prompt_len)):
-                curr_prompt_len = prompt_len[idx]+2
-                curr_reply_len = reply_len[idx]
-                curr_prompt = prompt.squeeze(0)[idx].unsqueeze(0).unsqueeze(0)
-                curr_reply = reply.squeeze(0)[idx].unsqueeze(0).unsqueeze(0)
-                
-                if not current_batch:
-                    total_phrase_pairs = 0
-                    loss_batch = 0
-                if prompt.size()[1] == 0:
-                    continue
-                if train_settings['optimizer']==1:
-                    optimizer.zero_grad()
-                else:
-                    encoder_optimizer.zero_grad()
-                    decoder_optimizer.zero_grad()
-                # print(prompt.size())
-                current_batch += 1
-                curr_prompt = curr_prompt.to(device)
-                curr_reply = curr_reply.to(device)
-                batch_size = curr_prompt.size()[1]
-                
-                seq_length = curr_prompt_len.to(device)
-                total_phrase_pairs += batch_size
-                
-                data = curr_prompt
-                data = data.squeeze(0).squeeze(0)[:curr_prompt_len+2].unsqueeze(-1)
-                # print(data.shape)
-                # print(data)
-                # print(prompt_len)
-                # batch_size_to_encoder =  torch.tensor(curr_prompt_len, dtype=torch.int64).to('cpu')
-                batch_size_to_encoder = curr_prompt_len.cpu().clone().detach().to(torch.int64)
-                # batch_size_to_encoder = curr_prompt_len.clone().detach()
-                # print(prompt_len)
-                output_encoder, hidden_encoder = encoder(data, batch_size_to_encoder)
-
-                
-
-                decoder_input = torch.LongTensor([[moviephrasesdata.voc.index(moviephrasesdata.start_token) for _ in range(batch_size)]])
-                # print(decoder_input)
-                decoder_input = decoder_input.to(device)
-                
-                hidden_encoder = hidden_encoder[-1, :, :].unsqueeze(0)
-                
-                # print(hidden_encoder.shape)
-                if model_settings['use_attention']:
-                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder, output_encoder)
-                else:
-                    output_decoder, hidden_decoder = decoder(decoder_input, hidden_encoder)
-                # print(output_decoder.shape)
-                # print(hidden_decoder.shape)
-                top_k_predict = output_decoder.topk(1).indices
-                # print(output_decoder.topk(5).indices)
-                true_response = curr_reply.squeeze(0).squeeze(0)[:curr_reply_len+1].unsqueeze(0).unsqueeze(0)
-                targets = true_response[0, :, 1]
-                # print(targets)
-                targets = targets.to(device)
-                
-                loss = loss_function(output_decoder, targets)
-                loss_dialogue = 0
-                loss_dialogue += loss
-                pred_reply = [top_k_predict]
-
-                
-                for idx in range(1,true_response.shape[2]-1):
-                    # print(top_k_predict)
-                    decoder_input = top_k_predict.view(-1, batch_size)
-                    decoder_input = decoder_input.to(device)
-                    # print('Predicted Response:', moviephrasesdata.tokenizer.decode((decoder_input.squeeze(0))))
+            try:
+                # print(prompt)
+                for idx in range(len(prompt_len)):
+                    curr_prompt_len = prompt_len[idx]+2
+                    curr_reply_len = reply_len[idx]
+                    curr_prompt = prompt.squeeze(0)[idx].unsqueeze(0).unsqueeze(0)
+                    curr_reply = reply.squeeze(0)[idx].unsqueeze(0).unsqueeze(0)
                     
+                    if not current_batch:
+                        total_phrase_pairs = 0
+                        loss_batch = 0
+                    if prompt.size()[1] == 0:
+                        continue
+                    if train_settings['optimizer']==1:
+                        optimizer.zero_grad()
+                    else:
+                        encoder_optimizer.zero_grad()
+                        decoder_optimizer.zero_grad()
+                    # print(prompt.size())
+                    current_batch += 1
+                    curr_prompt = curr_prompt.to(device)
+                    curr_reply = curr_reply.to(device)
+                    batch_size = curr_prompt.size()[1]
+                    
+                    seq_length = curr_prompt_len
+                    total_phrase_pairs += batch_size
+                    
+                    data = curr_prompt
+                    data = data.squeeze(0).squeeze(0)[:curr_prompt_len+2].unsqueeze(-1)
+                    # print(data.shape)
+                    # print(data)
+                    # print(prompt_len)
+                    batch_size_to_encoder =  torch.tensor(curr_prompt_len, dtype=torch.int64).to('cpu')
+                    # batch_size_to_encoder = curr_prompt_len.clone().detach()
+                    # print(prompt_len)
+                    output_encoder, hidden_encoder = encoder(data, batch_size_to_encoder)
+
+                    
+
+                    decoder_input = torch.LongTensor([[moviephrasesdata.voc.index(moviephrasesdata.start_token) for _ in range(batch_size)]])
+                    # print(decoder_input)
+                    decoder_input = decoder_input.to(device)
+                    
+                    hidden_encoder = hidden_encoder[-1, :, :].unsqueeze(0)
+                    hidden_decoder = hidden_encoder
+                    # print(hidden_encoder.shape)
                     if model_settings['use_attention']:
                         output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder, output_encoder)
                     else:
                         output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder)
-                    
-                    # print(output_decoder)
-                    # print(output_decoder.topk(5).indices)
+                    # print(output_decoder.shape)
+                    # print(hidden_decoder.shape)
                     top_k_predict = output_decoder.topk(1).indices
-                    pred_reply.append(top_k_predict)
-                    targets = true_response[0, :, idx+1]
-                    targets = targets.to(device)
-                    # loss from the predicted vs true tokens
-                    # print(output_decoder.squeeze(0))
+                    # print(output_decoder.topk(5).indices)
+                    true_response = curr_reply.squeeze(0).squeeze(0)[1:curr_reply_len+2].unsqueeze(0).unsqueeze(0)
+                    targets = true_response[0, :, 1]
                     # print(targets)
-                    loss = loss_function(output_decoder, targets)
-                    # print(top_k_predict, targets)
-                    loss_dialogue += loss
-                
-                
+                    targets = targets.to(device)
                     
-                loss_dialogue = loss_dialogue / seq_length
-                # print(loss_dialogue)
-                # add dialogue loss to the batch loss
-                loss_batch += loss_dialogue
-                print([moviephrasesdata.voc[x[0][0]] for x in pred_reply])
-                if not current_batch % num_batches:
-                    # print('Backpropagating')
-                    # print([moviephrasesdata.voc[y] for y in curr_reply[0][0]])
-                    current_batch = 0
-                    loss_batch = loss_batch / num_batches
-                    epoch_loss += loss_batch.item()
-                    processed_total_batches += 1
-                    # print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}'.format(loss_batch, total_phrase_pairs))
-                    loss_batch.backward()
-                    # print("IOANDASJNDASNDAJWNDOAXDA")
-                    if train_settings['optimizer']==1:
-                        optimizer.step()
-                    else:
-                        _ = nn.utils.clip_grad_norm_(encoder.parameters(), train_settings['clip'])
-                        _ = nn.utils.clip_grad_norm_(decoder.parameters(), train_settings['clip'])
-                        encoder_optimizer.step()
-                        decoder_optimizer.step()
-                # else:
-                #     print('hi')
+                    loss = loss_function(output_decoder, targets)
+                    loss_dialogue = 0
+                    loss_dialogue += loss
+                    pred_reply = []
 
+                    
+                    for idx in range(true_response.size()[2]-2):
+                        
+                        decoder_input = top_k_predict.view(-1, batch_size)
+                        pred_reply.append(decoder_input)
+                        decoder_input = decoder_input.to(device)
+                        # print('Predicted Response:', moviephrasesdata.tokenizer.decode((decoder_input.squeeze(0))))
+                        
+                        if model_settings['use_attention']:
+                            output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder, output_encoder)
+                        else:
+                            output_decoder, hidden_decoder = decoder(decoder_input, hidden_decoder)
+                        
+                        # print(output_decoder)
+                        # print(output_decoder.topk(5).indices)
+                        top_k_predict = output_decoder.topk(1).indices
+
+                        targets = true_response[0, :, idx +1]
+                        # loss from the predicted vs true tokens
+                        # print(output_decoder.squeeze(0))
+                        # print(targets)
+                        loss = loss_function(output_decoder, targets)
+                        loss_dialogue += loss
+                    
+                    
+                        
+                    loss_dialogue = loss_dialogue / seq_length
+                    # print(loss_dialogue)
+                    # add dialogue loss to the batch loss
+                    loss_batch += loss_dialogue
+                    
+                    if not current_batch % num_batches:
+                        print([moviephrasesdata.voc[x[0][0]] for x in pred_reply])
+                        current_batch = 0
+                        loss_batch = loss_batch / num_batches
+                        epoch_loss += loss_batch.item()
+                        processed_total_batches += 1
+                        # print('Loss={0:.6f}, total phrase pairs in the batch = {1:d}'.format(loss_batch, total_phrase_pairs))
+                        loss_batch.backward()
+                        # print("IOANDASJNDASNDAJWNDOAXDA")
+                        if train_settings['optimizer']==1:
+                            optimizer.step()
+                        else:
+                            _ = nn.utils.clip_grad_norm_(encoder.parameters(), train_settings['clip'])
+                            _ = nn.utils.clip_grad_norm_(decoder.parameters(), train_settings['clip'])
+                            encoder_optimizer.step()
+                            decoder_optimizer.step()
+            except:
+                print('Something happened')
                         
         #________________________________________________________TURN OFF FOR DEBUGGING__________________________________________________________________
         epoch_loss = epoch_loss / processed_total_batches
