@@ -141,12 +141,13 @@ class DialogData(data.Dataset):
         return ind
     
     def preprocess_tokens(self, text):
+        to_put = self.max_seq - 2
         ind_tokens = self.preprocess_text(text)
         ind_tokens = self.transform_tokens_to_voc_idx(ind_tokens)
-        if len(ind_tokens) >= self.max_seq:
-            ind_tokens = ind_tokens[:self.max_seq]
+        if len(ind_tokens) >= to_put:
+            ind_tokens = ind_tokens[:to_put]
         else:
-            ind_tokens.extend([self.voc_dict[self.unk_token]] * (self.max_seq - len(ind_tokens)))
+            ind_tokens.extend([self.voc_dict[self.unk_token]] * (to_put - len(ind_tokens)))
             
         ind_tokens.insert(0, self.voc_dict[self.start_token])
         ind_tokens.append(self.voc_dict[self.end_token])
