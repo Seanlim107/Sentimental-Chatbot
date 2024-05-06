@@ -143,9 +143,9 @@ def main():
     settings = read_settings(filepath+args.config)
 
     # Access and use the settings as needed
-    data_settings = settings.get('data', {})
-    model_settings = settings.get('model', {})
-    train_settings = settings.get('train', {})
+    data_settings = settings.get('data_senti', {})
+    model_settings = settings.get('senti_model', {})
+    train_settings = settings.get('train_senti', {})
 
     train(data_settings, model_settings, train_settings)
     

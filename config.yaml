@@ -1,0 +1,47 @@
+data_senti:
+  max_seq: 10
+  train_size: 0.8
+  batch_size: 16
+  num_output: 3
+
+model_senti:
+  embedding_dim: 512
+  lstm_hidden_dim: 512
+  hidden_dim: 256
+  hidden_dim2: 128
+  n_layers: 3
+  drop_prob: 0.5
+  
+train_senti:
+    epochs: 100
+    learning_rate: 0.0001
+
+data_ende:
+  max_seq: 10
+  train_size: 0.8
+  batch_size: 64
+  min_seq: 3
+
+model_ende: 
+  hidden_dim: 500
+  use_attention: True
+  encoder_num_layers: 2
+  decoder_num_layers: 2
+  dropout: 0.1
+  feature_size: 128
+  checkpoint_iter: 4000
+  
+train_ende:
+  lr: 0.0001
+  epochs: 100
+  clip: 50
+  teacher_forcing_ratio: 1.0
+  decoder_learning_ratio: 5.0
+  n_iteration: 4000
+  print_every: 1
+  save_every: 500
+  # optimizer: 2         # 1 = same optimizer, 2 = different optimizer (for encoder and decoder)
+  # decoder_decay_ratio: 5.0
+  # decay_ratio: 10
+  # num_seq_process: 1
+  # clip: 50
