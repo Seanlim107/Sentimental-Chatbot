@@ -13,8 +13,8 @@ from io import open
 import itertools
 import math
 import json
-from logger import Logger
-from dataset import batch2TrainData, normalizeString, indexesFromSentence
+# from logger import Logger
+# from dataset import batch2TrainData, normalizeString, indexesFromSentence
 
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences

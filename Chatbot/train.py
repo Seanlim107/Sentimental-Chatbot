@@ -13,11 +13,12 @@ from io import open
 import itertools
 import math
 import json
+from logger import Logger
 from utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
 from dataset import inputVar, outputVar, batch2TrainData, indexesFromSentence, zeroPadding, binaryMatrix, trimRareWords, printLines, loadLinesAndConversations, extractSentencePairs, Voc, unicodeToAscii, normalizeString, readVocs, filterPair, filterPairs, loadPrepareData
 from models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder
 from train_test_funcs import maskNLLLoss, train, trainIters, evaluate, evaluateInput
-from logger import Logger
+
 
 USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")

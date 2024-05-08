@@ -14,42 +14,42 @@ import itertools
 import math
 import json
 import os
-os.chdir('/')
-from logger import Logger
-from utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
-from dataset import inputVar, outputVar, batch2TrainData, indexesFromSentence, zeroPadding, binaryMatrix, trimRareWords, printLines, loadLinesAndConversations, extractSentencePairs, Voc, unicodeToAscii, normalizeString, readVocs, filterPair, filterPairs, loadPrepareData
-from models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder
-from train_test_funcs import maskNLLLoss, train, trainIters, evaluate, evaluateInput
+from Chatbot.logger import Logger
+from Chatbot.utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
+from Chatbot.dataset import inputVar, outputVar, batch2TrainData, indexesFromSentence, zeroPadding, binaryMatrix, trimRareWords, printLines, loadLinesAndConversations, extractSentencePairs, Voc, unicodeToAscii, normalizeString, readVocs, filterPair, filterPairs, loadPrepareData
+from Chatbot.models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder
+from Chatbot.train_test_funcs import maskNLLLoss, train, trainIters, evaluate, evaluateInput
 USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
 
 filepath=os.path.dirname(os.path.realpath(__file__))
+chatbot_filepath = os.path.join(filepath, 'Chatbot')
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences
 SOS_token = 1  # Start-of-sentence token
 EOS_token = 2  # End-of-sentence token
 
 corpus_name = "movie-corpus"
-corpus = os.path.join(filepath, 'data',corpus_name)
+corpus = os.path.join(chatbot_filepath, 'data', corpus_name)
 
 # Define path to new file
-datafile = os.path.join(filepath, corpus, "formatted_movie_lines.txt")
+datafile = os.path.join(corpus, "formatted_movie_lines.txt")
 
-args = parse_arguments()
+configpath =  '/config.yaml'
 # print(args)
 # Read settings from the YAML file
 
-settings = read_settings(filepath+args.config)
+settings = read_settings(filepath+configpath)
 
 # Access and use the settings as needed
 data_settings = settings.get('data_ende', {})
 model_settings = settings.get('model_ende', {})
 train_settings = settings.get('train_ende', {})
 MAX_LENGTH = data_settings['max_seq']  # Maximum sentence length to consider
-print(MAX_LENGTH)
+# print(MAX_LENGTH)
 
 # # Load/Assemble voc and pairs
-save_dir = os.path.join(filepath, "data", "save")
+save_dir = os.path.join(chatbot_filepath, "data", "save")
 voc = Voc(datafile)
 
 # Configure models
@@ -66,7 +66,7 @@ batch_size = data_settings['batch_size']
 # Set checkpoint to load from; set to None if starting from scratch
 checkpoint_iter = model_settings['checkpoint_iter']
 
-loadFilename = os.path.join(filepath, save_dir, model_name, corpus_name,
+loadFilename = os.path.join(chatbot_filepath, save_dir, model_name, corpus_name,
                     '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
                     '{}_checkpoint.tar'.format(checkpoint_iter))
 # Load model if a ``loadFilename`` is provided
@@ -83,8 +83,7 @@ if os.path.exists(loadFilename):
     embedding_sd = checkpoint['embedding']
     voc.__dict__ = checkpoint['voc_dict']
 else:
-    print(f'Checkpoint {loadFilename} not detected, starting from scratch')
-    voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
+    raise Exception('Checkpoint must exist for Chatbot')
 
 # Initialize word embeddings
 embedding = nn.Embedding(voc.num_words, hidden_size)
