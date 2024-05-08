@@ -29,19 +29,13 @@ model_ende:
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 4000
+  checkpoint_iter: 32000
   
 train_ende:
   lr: 0.0001
-  epochs: 100
   clip: 50
   teacher_forcing_ratio: 1.0
   decoder_learning_ratio: 5.0
-  n_iteration: 4000
+  n_iteration: 32000
   print_every: 1
-  save_every: 500
-  # optimizer: 2         # 1 = same optimizer, 2 = different optimizer (for encoder and decoder)
-  # decoder_decay_ratio: 5.0
-  # decay_ratio: 10
-  # num_seq_process: 1
-  # clip: 50
+  save_every: 4000

@@ -13,7 +13,8 @@ from io import open
 import itertools
 import math
 import json
-from dataset import indexesFromSentence, normalizeString, batch2TrainData
+from logger import Logger
+from dataset import batch2TrainData, normalizeString, indexesFromSentence
 
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences
@@ -32,8 +33,7 @@ def maskNLLLoss(inp, target, mask):
     return loss, nTotal.item()
 
 def train(input_variable, lengths, target_variable, mask, max_target_len, encoder, decoder, embedding,
-          encoder_optimizer, decoder_optimizer, batch_size, clip, max_length, teacher_forcing_ratio, n_layers):
-
+          encoder_optimizer, decoder_optimizer, batch_size, clip, max_length, teacher_forcing_ratio):
     # Zero gradients
     encoder_optimizer.zero_grad()
     decoder_optimizer.zero_grad()
@@ -71,9 +71,9 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
             )
             # Teacher forcing: next input is current target
             decoder_input = target_variable[t].view(1, -1)
-            print(decoder_input.shape)
-            print(decoder_hidden.shape)
-            print(encoder_outputs.shape)
+            # print(decoder_input.shape)
+            # print(decoder_hidden.shape)
+            # print(encoder_outputs.shape)
             # Calculate and accumulate loss
             mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
             loss += mask_loss
@@ -107,8 +107,11 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
 
     return sum(print_losses) / n_totals
 
-def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer, embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size, print_every, save_every, clip, corpus_name, max_length, teacher_forcing_ratio, n_layers, checkpoint=None, loadFilename=None):
-    
+def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer,  embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size, print_every, save_every, clip, corpus_name, max_length, teacher_forcing_ratio, loadFilename=None):
+    wandb_logger = Logger(
+        f"inm706_chatbot_chatbot",
+        project='inm706_CW')
+    logger = wandb_logger.get_logger()
     # Load batches for each iteration
     training_batches = [batch2TrainData(voc, [random.choice(pairs) for _ in range(batch_size)])
                       for _ in range(n_iteration)]
@@ -117,7 +120,8 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
     print('Initializing ...')
     start_iteration = 1
     print_loss = 0
-    if loadFilename:
+    if os.path.exists(loadFilename):
+        checkpoint = torch.load(loadFilename)
         start_iteration = checkpoint['iteration'] + 1
 
     # Training loop
@@ -129,18 +133,19 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
 
         # Run a training iteration with batch
         loss = train(input_variable, lengths, target_variable, mask, max_target_len, encoder,
-                     decoder, embedding, encoder_optimizer, decoder_optimizer, batch_size, clip, max_length, teacher_forcing_ratio, n_layers)
+                     decoder, embedding, encoder_optimizer, decoder_optimizer, batch_size, clip, max_length, teacher_forcing_ratio)
         print_loss += loss
 
         # Print progress
         if iteration % print_every == 0:
             print_loss_avg = print_loss / print_every
+            logger.log({'train_loss': print_loss_avg})
             print("Iteration: {}; Percent complete: {:.1f}%; Average loss: {:.4f}".format(iteration, iteration / n_iteration * 100, print_loss_avg))
             print_loss = 0
 
         # Save checkpoint
         if (iteration % save_every == 0):
-            directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size))
+            directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, encoder.hidden_size))
             if not os.path.exists(directory):
                 os.makedirs(directory)
             torch.save({
@@ -153,6 +158,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
                 'voc_dict': voc.__dict__,
                 'embedding': embedding.state_dict()
             }, os.path.join(directory, '{}_{}.tar'.format(iteration, 'checkpoint')))
+            print('Checkpoint Saved')
 
 def evaluate(encoder, decoder, searcher, voc, sentence, max_length=10):
     ### Format input sentence as a batch

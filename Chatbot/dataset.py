@@ -162,7 +162,7 @@ def filterPairs(pairs, MAX_LENGTH):
     return [pair for pair in pairs if filterPair(pair, MAX_LENGTH)]
 
 # Using the functions defined above, return a populated voc object and pairs list
-def loadPrepareData(corpus, corpus_name, datafile, save_dir, MAX_LENGTH=10):
+def loadPrepareData(corpus, corpus_name, datafile, save_dir, MAX_LENGTH=10, init=False):
     print("Start preparing training data ...")
     voc, pairs = readVocs(datafile, corpus_name)
     print("Read {!s} sentence pairs".format(len(pairs)))

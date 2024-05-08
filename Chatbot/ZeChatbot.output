@@ -1,0 +1,30 @@
+e205877d44ce7551989287af4f43729092dd648c
+Python 3.9.5
+10
+Start preparing training data ...
+Reading lines...
+Read 221282 sentence pairs
+Trimmed to 64313 sentence pairs
+Counting words...
+Counted words: 18082
+
+pairs:
+['they do to !', 'they do not !']
+['she okay ?', 'i hope so .']
+['wow', 'let s go .']
+['what good stuff ?', 'the real you .']
+['the real you .', 'like my fear of wearing pastels ?']
+['do you listen to this crap ?', 'what crap ?']
+['well no . . .', 'then that s all you had to say .']
+['then that s all you had to say .', 'but']
+['but', 'you always been this selfish ?']
+['have fun tonight ?', 'tons']
+keep_words 7833 / 18079 = 0.4333
+Trimmed from 64313 pairs to 53131, 0.8261 of total
+Building encoder and decoder ...
+Checkpoint loaded
+Models built and ready to go!
+Building optimizers ...
+Starting Training!
+Initializing ...
+Training...
