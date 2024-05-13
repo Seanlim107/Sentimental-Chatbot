@@ -18,7 +18,7 @@ os.chdir('/')
 from logger import Logger
 from utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
 from dataset import inputVar, outputVar, batch2TrainData, indexesFromSentence, zeroPadding, binaryMatrix, trimRareWords, printLines, loadLinesAndConversations, extractSentencePairs, Voc, unicodeToAscii, normalizeString, readVocs, filterPair, filterPairs, loadPrepareData
-from models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder
+from models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder, SimpleDecoderRNN
 from train_test_funcs import maskNLLLoss, train, trainIters, evaluate, evaluateInput
 USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
@@ -49,11 +49,11 @@ MAX_LENGTH = data_settings['max_seq']  # Maximum sentence length to consider
 print(MAX_LENGTH)
 
 # # Load/Assemble voc and pairs
-save_dir = os.path.join(filepath, "data", "save")
+save_dir = os.path.join(filepath, "data", "checkpoints")
 voc = Voc(datafile)
 
 # Configure models
-model_name = 'cb_model'
+model_name = 'LSTM_noatt_dot'
 attn_model = 'dot'
 #``attn_model = 'general'``
 #``attn_model = 'concat'``
@@ -66,9 +66,8 @@ batch_size = data_settings['batch_size']
 # Set checkpoint to load from; set to None if starting from scratch
 checkpoint_iter = model_settings['checkpoint_iter']
 
-loadFilename = os.path.join(filepath, save_dir, model_name, corpus_name,
-                    '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, hidden_size),
-                    '{}_checkpoint.tar'.format(checkpoint_iter))
+loadFilename = os.path.join(save_dir, model_name, "900_checkpoint.tar")
+print(f"Loading model from: {loadFilename}")
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
     print('Checkpoint Detected')
@@ -90,8 +89,8 @@ else:
 embedding = nn.Embedding(voc.num_words, hidden_size)
 
 # Initialize encoder & decoder models
-encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout)
-decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout)
+encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM')
+decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
 
 
 if os.path.exists(loadFilename):
