@@ -13,8 +13,9 @@ from io import open
 import itertools
 import math
 import json
-# from logger import Logger
-# from dataset import batch2TrainData, normalizeString, indexesFromSentence
+from logger import Logger
+from dataset import batch2TrainData, normalizeString, indexesFromSentence
+from tqdm.auto import tqdm
 
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences
@@ -57,8 +58,26 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
     decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size)]])
     decoder_input = decoder_input.to(device)
 
-    # Set initial decoder hidden state to the encoder's final hidden state
-    decoder_hidden = encoder_hidden[:decoder.n_layers]
+    # # Set initial decoder hidden state to the encoder's final hidden state
+    # if isinstance(encoder_hidden, tuple):  # This checks if the encoder is an LSTM
+    #     # Handle LSTM's hidden and cell states
+    #     decoder_hidden = (encoder_hidden[0][:decoder.n_layers], encoder_hidden[1][:decoder.n_layers])
+    # else:
+    #     # Handle GRU's hidden state
+    #     decoder_hidden = encoder_hidden[:decoder.n_layers]
+    # Set initial decoder hidden state to the averaged encoder's final hidden state
+    if isinstance(encoder_hidden, tuple):  # This checks if the encoder is an LSTM
+        # Handle LSTM's hidden and cell states
+        # Averaging the forward and backward states from each layer
+        decoder_hidden = (
+            torch.mean(encoder_hidden[0].view(encoder.n_layers, 2, -1, encoder.hidden_size), dim=1),
+            torch.mean(encoder_hidden[1].view(encoder.n_layers, 2, -1, encoder.hidden_size), dim=1)
+        )
+    else:
+        # Handle GRU's hidden state
+        # Similarly averaging the forward and backward states from each layer
+        decoder_hidden = torch.mean(encoder_hidden.view(encoder.n_layers, 2, -1, encoder.hidden_size), dim=1)
+
 
     # Determine if we are using teacher forcing this iteration
     use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
@@ -109,7 +128,7 @@ def train(input_variable, lengths, target_variable, mask, max_target_len, encode
 
 def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, decoder_optimizer,  embedding, encoder_n_layers, decoder_n_layers, save_dir, n_iteration, batch_size, print_every, save_every, clip, corpus_name, max_length, teacher_forcing_ratio, loadFilename=None):
     wandb_logger = Logger(
-        f"inm706_chatbot_chatbot",
+        model_name,
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     # Load batches for each iteration
@@ -126,7 +145,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
 
     # Training loop
     print("Training...")
-    for iteration in range(start_iteration, n_iteration + 1):
+    for iteration in tqdm(range(start_iteration, n_iteration + 1), desc="Training Chatbot"):
         training_batch = training_batches[iteration - 1]
         # Extract fields from batch
         input_variable, lengths, target_variable, mask, max_target_len = training_batch
@@ -145,7 +164,7 @@ def trainIters(model_name, voc, pairs, encoder, decoder, encoder_optimizer, deco
 
         # Save checkpoint
         if (iteration % save_every == 0):
-            directory = os.path.join(save_dir, model_name, corpus_name, '{}-{}_{}'.format(encoder_n_layers, decoder_n_layers, encoder.hidden_size))
+            directory = os.path.join(save_dir, model_name)
             if not os.path.exists(directory):
                 os.makedirs(directory)
             torch.save({

@@ -13,29 +13,38 @@ SOS_token = 1  # Start-of-sentence token
 EOS_token = 2  # End-of-sentence token
     
 class EncoderRNN(nn.Module):
-    def __init__(self, hidden_size, embedding, n_layers=1, dropout=0):
+    def __init__(self, hidden_size, embedding, n_layers=1, dropout=0, rnn_cell='GRU'):
         super(EncoderRNN, self).__init__()
         self.n_layers = n_layers
         self.hidden_size = hidden_size
         self.embedding = embedding
 
-        # Initialize GRU; the input_size and hidden_size parameters are both set to 'hidden_size'
-        #   because our input size is a word embedding with number of features == hidden_size
-        self.gru = nn.GRU(hidden_size, hidden_size, n_layers,
-                          dropout=(0 if n_layers == 1 else dropout), bidirectional=True)
+        # Select the type of RNN cell (GRU or LSTM)
+        if rnn_cell == 'GRU':
+            self.rnn = nn.GRU(hidden_size, hidden_size, n_layers,
+                              dropout=(0 if n_layers == 1 else dropout), bidirectional=True)
+        elif rnn_cell == 'LSTM':
+            self.rnn = nn.LSTM(hidden_size, hidden_size, n_layers,
+                               dropout=(0 if n_layers == 1 else dropout), bidirectional=True)
+        else:
+            raise ValueError(f"Unsupported RNN cell type: {rnn_cell}")
 
     def forward(self, input_seq, input_lengths, hidden=None):
         # Convert word indexes to embeddings
         embedded = self.embedding(input_seq)
         # Pack padded batch of sequences for RNN module
         packed = nn.utils.rnn.pack_padded_sequence(embedded, input_lengths)
-        # Forward pass through GRU
-        outputs, hidden = self.gru(packed, hidden)
+        # Forward pass through the selected RNN
+        outputs, hidden = self.rnn(packed, hidden)
         # Unpack padding
         outputs, _ = nn.utils.rnn.pad_packed_sequence(outputs)
-        # Sum bidirectional GRU outputs
-        outputs = outputs[:, :, :self.hidden_size] + outputs[:, : ,self.hidden_size:]
-        # Return output and final hidden state
+        # Sum bidirectional outputs
+        if isinstance(self.rnn, nn.LSTM):
+            # LSTM returns hidden states and cell states, but only hidden states are summed here
+            outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:]
+        else:
+            outputs = outputs[:, :, :self.hidden_size] + outputs[:, :, self.hidden_size:]
+        # Return output and final hidden state (or state tuple in the case of LSTM)
         return outputs, hidden
 
 # Luong attention layer
@@ -77,9 +86,52 @@ class Attn(nn.Module):
 
         # Return the softmax normalized probability scores (with added dimension)
         return F.softmax(attn_energies, dim=1).unsqueeze(1)
-    
+
+class SimpleDecoderRNN(nn.Module):
+    def __init__(self, attention, embedding, hidden_size, output_size, n_layers=1, dropout=0.1, rnn_cell = 'GRU'): #first arg not used
+        super(SimpleDecoderRNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.n_layers = n_layers
+        self.dropout = dropout
+
+        # Define layers
+        self.embedding = embedding
+        self.embedding_dropout = nn.Dropout(dropout)
+        
+        # Initialize the RNN layer based on the rnn_cell argument
+        if rnn_cell == 'GRU':
+            self.rnn = nn.GRU(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
+        elif rnn_cell == 'LSTM':
+            self.rnn = nn.LSTM(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
+        else:
+            raise ValueError(f"Unsupported RNN cell type: {rnn_cell}")
+        
+        self.out = nn.Linear(hidden_size, output_size)
+
+    def forward(self, input_step, last_hidden, encoder_outputs): #last arg not used
+        # Get embedding of current input word
+        embedded = self.embedding(input_step)
+        embedded = self.embedding_dropout(embedded)
+        
+        # Forward through unidirectional GRU
+        rnn_output, hidden = self.rnn(embedded, last_hidden)
+        
+        # Squeeze the output from batch dimension (B=1)
+        rnn_output = rnn_output.squeeze(0)
+        
+        # Use output layer to get the predicted output
+        output = self.out(rnn_output)
+        
+        # Apply softmax to get probabilities of the output
+        output = F.softmax(output, dim=1)
+        
+        # Return output and final hidden state
+        return output, hidden
+
+   
 class LuongAttnDecoderRNN(nn.Module):
-    def __init__(self, attn_model, embedding, hidden_size, output_size, n_layers=1, dropout=0.1):
+    def __init__(self, attn_model, embedding, hidden_size, output_size, n_layers=1, dropout=0.1, rnn_cell = 'GRU'):
         super(LuongAttnDecoderRNN, self).__init__()
 
         # Keep for reference
@@ -92,7 +144,14 @@ class LuongAttnDecoderRNN(nn.Module):
         # Define layers
         self.embedding = embedding
         self.embedding_dropout = nn.Dropout(dropout)
-        self.gru = nn.GRU(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
+        # Initialize the RNN layer based on the rnn_cell argument
+        if rnn_cell == 'GRU':
+            self.rnn = nn.GRU(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
+        elif rnn_cell == 'LSTM':
+            self.rnn = nn.LSTM(hidden_size, hidden_size, n_layers, dropout=(0 if n_layers == 1 else dropout))
+        else:
+            raise ValueError(f"Unsupported RNN cell type: {rnn_cell}")
+        
         self.concat = nn.Linear(hidden_size * 2, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
 
@@ -104,7 +163,7 @@ class LuongAttnDecoderRNN(nn.Module):
         embedded = self.embedding(input_step)
         embedded = self.embedding_dropout(embedded)
         # Forward through unidirectional GRU
-        rnn_output, hidden = self.gru(embedded, last_hidden)
+        rnn_output, hidden = self.rnn(embedded, last_hidden)
         # Calculate attention weights from the current GRU output
         attn_weights = self.attn(rnn_output, encoder_outputs)
         # Multiply attention weights to encoder outputs to get new "weighted sum" context vector
@@ -130,7 +189,18 @@ class GreedySearchDecoder(nn.Module):
         # Forward input through encoder model
         encoder_outputs, encoder_hidden = self.encoder(input_seq, input_length)
         # Prepare encoder's final hidden layer to be first hidden input to the decoder
-        decoder_hidden = encoder_hidden[:self.decoder.n_layers]
+
+        # Check if LSTM and handle accordingly
+        if isinstance(encoder_hidden, tuple):  # LSTM outputs (h, c)
+            # Averaging the forward and backward states from each layer for both h and c
+            decoder_hidden = (
+                torch.mean(encoder_hidden[0].view(self.encoder.n_layers, 2, -1, self.encoder.hidden_size), dim=1),
+                torch.mean(encoder_hidden[1].view(self.encoder.n_layers, 2, -1, self.encoder.hidden_size), dim=1)
+            )
+        else:  # GRU or any non-tuple output RNN
+            # Similarly averaging the forward and backward states from each layer
+            decoder_hidden = torch.mean(encoder_hidden.view(self.encoder.n_layers, 2, -1, self.encoder.hidden_size), dim=1)
+            
         # Initialize decoder input with SOS_token
         decoder_input = torch.ones(1, 1, device=device, dtype=torch.long) * SOS_token
         # Initialize tensors to append decoded words to
