@@ -29,13 +29,13 @@ model_ende:
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 32000
+  checkpoint_iter: 32000 # from which to restart 
   
 train_ende:
   lr: 0.0001
   clip: 50
   teacher_forcing_ratio: 1.0
   decoder_learning_ratio: 5.0
-  n_iteration: 32000
+  n_iteration: 10000
   print_every: 1
-  save_every: 4000
+  save_every: 100
