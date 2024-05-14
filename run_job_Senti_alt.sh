@@ -21,14 +21,12 @@ module load gnu
 export WANDB_API_KEY=e205877d44ce7551989287af4f43729092dd648c
 
 echo $WANDB_API_KEY
-cd Sentimental-Chatbot/Baseline_chatbot
-
+cd Sentimental-Chatbot/Senti_Classifier
 python --version
 #module load libs/nvidia-cuda/11.2.0/bin
 
 wandb login $WANDB_API_KEY --relogin
 #pip freeze
 #Run your script.
-export https_proxy=http://hpc-proxy00.city.ac.uk
-cd Sentimental-Classifier/Baseline_chatbot
+export https_proxy=http://hpc-proxy00.city.ac.uk:3128
 python3 train.py

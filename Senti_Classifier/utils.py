@@ -25,13 +25,18 @@ def split_data(dataset, batch_size):
     return train_loader, val_loader, test_loader
 
 
-def save_checkpoint(epoch, model, model_name, optimizer, test_acc, valid_acc):
+def save_checkpoint(epoch, model, model_name, optimizer, test_acc, valid_acc, voc):
     ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict(), 
-            'test_acc': test_acc, 'valid_acc': valid_acc}
+            'test_acc': test_acc, 'valid_acc': valid_acc, 'voc': voc}
+    torch.save(ckpt, f"{model_name}_ckpt_.pth")
+    
+def save_checkpoint_reg(epoch, model, model_name, optimizer, test_loss, valid_loss, voc):
+    ckpt = {'epoch': epoch, 'model_state_dict': model.state_dict(), 'optimizer_state': optimizer.state_dict(), 
+            'test_loss': test_loss, 'valid_loss': valid_loss, 'voc': voc}
     torch.save(ckpt, f"{model_name}_ckpt_.pth")
 
 
-def load_checkpoint(model, optimizer, test_acc, valid_acc, file_name):
+def load_checkpoint(model, optimizer, test_acc, valid_acc, file_name, voc):
     ckpt = torch.load(file_name, map_location=device)
     # model_weights = ckpt['model_state_dict']
     epoch = ckpt['epoch']
@@ -39,12 +44,25 @@ def load_checkpoint(model, optimizer, test_acc, valid_acc, file_name):
     valid_acc = ckpt['valid_acc']
     model.load_state_dict(ckpt['model_state_dict'])
     optimizer.load_state_dict(ckpt['optimizer_state'])
+    voc = ckpt['voc']
     
-    return epoch+1, test_acc, valid_acc
+    return epoch+1, test_acc, valid_acc, voc
+
+def load_checkpoint_reg(model, optimizer, test_loss, valid_loss, file_name, voc):
+    ckpt = torch.load(file_name, map_location=device)
+    # model_weights = ckpt['model_state_dict']
+    epoch = ckpt['epoch']
+    test_loss = ckpt['test_loss']
+    valid_loss = ckpt['valid_loss']
+    model.load_state_dict(ckpt['model_state_dict'])
+    optimizer.load_state_dict(ckpt['optimizer_state'])
+    voc = ckpt['voc']
+    
+    return epoch+1, test_loss, valid_loss, voc
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process settings from a YAML file.')
-    parser.add_argument('--config', type=str, default='./../config.yaml', help='Path to YAML configuration file')
+    parser.add_argument('--config', type=str, default='/../config.yaml', help='Path to YAML configuration file')
     return parser.parse_args()
 
 

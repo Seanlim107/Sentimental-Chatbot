@@ -30,5 +30,5 @@ wandb login $WANDB_API_KEY --relogin
 #pip freeze
 #Run your script.
 export https_proxy=http://hpc-proxy00.city.ac.uk:3128
-
+cd Sentimental-Chatbot/Senti_Classifier
 python3 train.py

@@ -8,7 +8,7 @@ from torch.utils.data import TensorDataset, DataLoader, random_split
 from collections import Counter, OrderedDict
 
 from models import SentimentLSTM
-from utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
+from utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint, load_checkpoint_reg, save_checkpoint_reg
 from logger import Logger
 from dataset import DialogData
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
@@ -32,7 +32,7 @@ def evaluate(optimizer, logger, data_settings, model, dataloader, mode, regressi
             X, y = X.to(device), y.to(device)
             ypred = model(X)
             if regression:
-                loss = F.mse_loss(ypred, y)
+                loss = F.mse_loss(ypred, y.unsqueeze(1).float())
                 total_loss += loss
             else:
                 ypred = torch.argmax(ypred, axis=1, keepdims=False)
@@ -47,6 +47,7 @@ def evaluate(optimizer, logger, data_settings, model, dataloader, mode, regressi
         print("Overall loss = {0:.4f}".format(avg_loss))
         
         logger.log({f"{mode} Average Loss": avg_loss })
+        return avg_loss
     else:
         overall_accuracy = accuracy_score(true_labels, predicted_labels)
         precision = precision_score(true_labels, predicted_labels, average='weighted')
@@ -58,8 +59,8 @@ def evaluate(optimizer, logger, data_settings, model, dataloader, mode, regressi
         })
         print(mode)
         print("Overall accuracy = {0:.4f}, precision = {1:.4f}, recall={2:.4f}".format(overall_accuracy, precision, recall))
-    # print(true_labels[:64],'\n',predicted_labels[:64])
-    return overall_accuracy,precision
+        # print(true_labels[:64],'\n',predicted_labels[:64])
+        return overall_accuracy,precision
             
 def train(data_settings, model_settings, train_settings):
     voc_init=data_settings['voc_init']
@@ -89,8 +90,8 @@ def train(data_settings, model_settings, train_settings):
     test_train_dataloader = DataLoader(train_dataset, batch_size=1, shuffle=False)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    
-    my_lstm = SentimentLSTM(vocab_senti_size=dialogdata.len_voc_keys, embedding_dim=model_settings['embedding_dim'],
+    voc = dialogdata.len_voc_keys
+    my_lstm = SentimentLSTM(vocab_senti_size=voc, embedding_dim=model_settings['embedding_dim'],
                             output_size=data_settings['num_output'], lstm_hidden_dim=model_settings['lstm_hidden_dim'], hidden_dim=model_settings['hidden_dim'],
                             hidden_dim2=model_settings['hidden_dim2'],n_layers=model_settings['n_layers'],
                             drop_prob=model_settings['drop_prob'], regression=regression)
@@ -99,7 +100,7 @@ def train(data_settings, model_settings, train_settings):
     optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings['learning_rate'])
     
     wandb_logger = Logger(
-        f"inm706_sentiment_chatbot",
+        f"inm706_sentiment_chatbot_v2",
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
@@ -112,11 +113,16 @@ def train(data_settings, model_settings, train_settings):
     # Variables to compare testing and validation accuracy FOR CHECKPOINTS ONLY
     max_test_acc = 0
     max_valid_acc = 0
+    min_test_loss = -1
+    min_valid_loss = -1
     ckpt_epoch = 0
     
     # Load existing model if it exists
     if os.path.exists(filename):
-        ckpt_epoch, max_test_acc, max_valid_acc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, filename)
+        if(regression):
+            ckpt_epoch, min_test_loss, min_valid_loss = load_checkpoint_reg(my_lstm, optimizer, min_test_loss, min_valid_loss, filename, voc)
+        else:
+            ckpt_epoch, max_test_acc, max_valid_acc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, filename, voc)
         print(f'Checkpoint detected, starting from epoch {ckpt_epoch}')
     else:
         print('No checkpoint, starting from scratch')
@@ -141,16 +147,30 @@ def train(data_settings, model_settings, train_settings):
         logger.log({'train_loss': total_loss/len(train_dataloader)})
         print('Epoch:{}, Train Loss:{}'.format(epoch, total_loss/len(train_dataloader)))
 
-        train_acc, train_prec = evaluate(optimizer, logger,data_settings,my_lstm,test_train_dataloader,mode='Train')
-        test_acc, test_prec = evaluate(optimizer, logger,data_settings,my_lstm,test_dataloader,mode='Test')
-        valid_acc, valid_prec = evaluate(optimizer, logger,data_settings,my_lstm,val_dataloader,mode='Valid')
+        if(regression):
+            train_loss = evaluate(optimizer, logger,data_settings,my_lstm,test_train_dataloader,mode='Train', regression=regression)
+            test_loss = evaluate(optimizer, logger,data_settings,my_lstm,test_dataloader,mode='Test', regression=regression)
+            valid_loss = evaluate(optimizer, logger,data_settings,my_lstm,val_dataloader,mode='Valid', regression=regression)
+            
+            if min_test_loss == -1 and min_valid_loss == -1:
+                save_checkpoint_reg(epoch, my_lstm, f'{model_name}_{epoch}', optimizer, test_loss, valid_loss, voc)
+                min_loss = total_loss
+                print('model saved')
+            elif test_loss < min_test_loss and valid_loss < min_valid_loss:
+                save_checkpoint_reg(epoch, my_lstm, f'{model_name}_{epoch}', optimizer, test_loss, valid_loss, voc)
+                min_loss = total_loss
+                print('model saved')
+        else:
+            train_acc, train_prec = evaluate(optimizer, logger,data_settings,my_lstm,test_train_dataloader,mode='Train', regression=regression)
+            test_acc, test_prec = evaluate(optimizer, logger,data_settings,my_lstm,test_dataloader,mode='Test', regression=regression)
+            valid_acc, valid_prec = evaluate(optimizer, logger,data_settings,my_lstm,val_dataloader,mode='Valid', regression=regression)
         
-        # Save checkpoint if model outperforms current model
-        if((test_acc > max_test_acc) and (valid_acc > max_valid_acc)):
-            max_test_acc = test_acc
-            max_valid_acc = valid_acc
-            save_checkpoint(epoch, my_lstm, 'Baseline_LSTM', optimizer, test_acc, valid_acc)
-            print('model saved')
+            # Save checkpoint if model outperforms current model
+            if((test_acc > max_test_acc) and (valid_acc > max_valid_acc)):
+                max_test_acc = test_acc
+                max_valid_acc = valid_acc
+                save_checkpoint(epoch, my_lstm, f'{model_name}_{epoch}', optimizer, test_acc, valid_acc, voc)
+                print('model saved')
     return
 
 # def calculate_metrics(logger, data_settings, model):

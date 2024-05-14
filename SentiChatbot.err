@@ -1,0 +1,36 @@
+[38;5;127mlibs[0m/[38;5;172mnvidia-cuda[0m/[38;5;67m11.2.0[0m/[38;5;68mbin[0m
+ |
+ [0;32mOK[0m
+wandb: Appending key for api.wandb.ai to your netrc file: /users/adfx758/.netrc
+wandb: Currently logged in as: fabulouspidgeon (sean-lim). Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.17.0
+wandb: Run data is saved locally in /users/adfx758/Sentimental-Chatbot/Senti_Classifier/wandb/run-20240514_164646-yj205xf4
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run logger-inm706_sentiment_chatbot_v2
+wandb: ⭐️ View project at https://wandb.ai/sean-lim/inm706_CW
+wandb: 🚀 View run at https://wandb.ai/sean-lim/inm706_CW/runs/yj205xf4
+Traceback (most recent call last):
+  File "/users/adfx758/Sentimental-Chatbot/Senti_Classifier/train.py", line 195, in <module>
+    main()
+  File "/users/adfx758/Sentimental-Chatbot/Senti_Classifier/train.py", line 191, in main
+    train(data_settings, model_settings, train_settings)
+  File "/users/adfx758/Sentimental-Chatbot/Senti_Classifier/train.py", line 156, in train
+    save_checkpoint_reg(epoch, my_lstm, f'{model_name}_{epoch}', optimizer, test_loss, valid_loss)
+TypeError: save_checkpoint_reg() missing 1 required positional argument: 'voc'
+wandb: - 0.005 MB of 0.005 MB uploadedwandb: \ 0.005 MB of 0.005 MB uploadedwandb: | 0.005 MB of 0.005 MB uploadedwandb: / 0.008 MB of 0.010 MB uploadedwandb: - 0.010 MB of 0.010 MB uploadedwandb: 
+wandb: Run history:
+wandb:  Test Average Loss ▁
+wandb: Train Average Loss ▁
+wandb: Valid Average Loss ▁
+wandb:         train_loss ▁
+wandb: 
+wandb: Run summary:
+wandb:  Test Average Loss 0.37329
+wandb: Train Average Loss 0.38003
+wandb: Valid Average Loss 0.39261
+wandb:         train_loss 0.39087
+wandb: 
+wandb: 🚀 View run logger-inm706_sentiment_chatbot_v2 at: https://wandb.ai/sean-lim/inm706_CW/runs/yj205xf4
+wandb: ⭐️ View project at: https://wandb.ai/sean-lim/inm706_CW
+wandb: Synced 5 W&B file(s), 0 media file(s), 2 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240514_164646-yj205xf4/logs

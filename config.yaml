@@ -3,7 +3,7 @@ data_senti:
   train_size: 0.8
   batch_size: 16
   num_output: 3
-  voc_init: True
+  voc_init: False
 
 model_senti:
   embedding_dim: 512
@@ -15,7 +15,7 @@ model_senti:
   regression: True
   
 train_senti:
-    epochs: 100
+    epochs: 500
     learning_rate: 0.00001
 
 data_ende:
