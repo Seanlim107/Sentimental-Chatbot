@@ -12,10 +12,11 @@ class SentimentLSTM(nn.Module):
                  hidden_dim = 512,
                  hidden_dim2 = 256,
                  n_layers = 3,
-                 drop_prob = 0.5):
+                 drop_prob = 0.5,
+                 regression = False):
         
         super(SentimentLSTM, self).__init__()
-        
+        self.regression = regression
         self.embedding_dim = embedding_dim
         self.lstm_hidden_dim = lstm_hidden_dim
         self.hidden_dim = hidden_dim
@@ -30,7 +31,12 @@ class SentimentLSTM(nn.Module):
         
         self.fc1 = nn.Linear(self.lstm_hidden_dim, self.hidden_dim)
         self.fc2 = nn.Linear(self.hidden_dim, self.hidden_dim2)
-        self.fc3 = nn.Linear(self.hidden_dim2, output_size)
+        
+        # output size of 3 for classification (-1, 0, 1)
+        self.classifier = nn.Linear(self.hidden_dim2, output_size)
+        
+        # output size of 1 for regression (-1, 0, 1)
+        self.regressor = nn.Linear(self.hidden_dim2, 1)
         
         #Initialize weights and biases
         for x in self.named_parameters():
@@ -47,15 +53,28 @@ class SentimentLSTM(nn.Module):
         out_lstm, _ = self.lstm(out_embed, (h0,c0))
         out_lstm = out_lstm[:,-1,:]
         out_lstm = self.dropout(out_lstm)
-        output1 = self.fc1(out_lstm)
         
-        output1 = F.relu(output1)
-        output1 = self.dropout(output1)
-        output2 = self.fc2(output1)
         
-        output2 = F.relu(output2)
-        output2 = self.dropout(output2)
-        output3 = self.fc3(output2)
+        
+        if(self.regression):
+            output1 = self.fc1(out_lstm)
+            # output1 = F.relu(output1)
+            output1 = self.dropout(output1)
+            output2 = self.fc2(output1)
+            
+            # output2 = F.relu(output2)
+            output2 = self.dropout(output2)
+            output3 = self.regressor(output2)
+            output3 = F.tanh(output3)
+        else:
+            output1 = self.fc1(out_lstm)
+            output1 = F.relu(output1)
+            output1 = self.dropout(output1)
+            output2 = self.fc2(output1)
+            
+            output2 = F.relu(output2)
+            output2 = self.dropout(output2)
+            output3 = self.classifier(output2)
         
         
         return output3

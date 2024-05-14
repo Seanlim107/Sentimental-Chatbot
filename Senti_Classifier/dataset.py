@@ -1,6 +1,5 @@
 import os
 from zipfile import ZipFile
-import datasets
 import pandas as pd
 import torch.utils
 from torch.utils import data
@@ -22,7 +21,7 @@ import numpy as np
 
 
 class DialogData(data.Dataset):
-    def __init__(self,max_seq=None, voc_init_cache=False, lem=True, stem=False, remove_stop=True):
+    def __init__(self,max_seq=None, voc_init_cache=False, lem=True, stem=False, remove_stop=True, regression=False):
         
         # Initialise variables
         self.max_seq = max_seq
@@ -34,7 +33,7 @@ class DialogData(data.Dataset):
         self.unk_token = '<UNK>'
         self.start_token = '<S>'
         self.end_token = '</S>'
-        
+        self.regression = regression
         
         self.stopwords = stopwords.words('english')
         self.voc_dict = OrderedDict()
@@ -49,6 +48,7 @@ class DialogData(data.Dataset):
         emotion_path=os.path.join(filepath,'dialogues_emotion.txt')
         dialog_list=[]
         emotion_list=[]
+        
         with open(dialog_path, 'rb') as dialog_file, open(emotion_path, 'rb') as emotion_file:
             for (dialog_line, emotion_line) in zip(dialog_file, emotion_file):
                 dialog = dialog_line.decode().split('__eou__')[:-1]
@@ -65,15 +65,26 @@ class DialogData(data.Dataset):
         # print(self.sentiment_sentences_df[self.sentiment_sentences_df.index.duplicated()])
         self.sentiment_sentences_df = self.sentiment_sentences_df.apply(pd.Series.explode, axis=0, ignore_index=True)
         self.sentiment_sentences_df['length'] = [len(word_tokenize(re.sub('\W+', ' ', self.sentiment_sentences_df['dialog'][x]))) for x in range(len(self.sentiment_sentences_df))]
-        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([0]), "emotion"] = 7
-        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([1,2,3,5]), "emotion"] = 0
-        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([4,6]), "emotion"] = 2
-        self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([7]), "emotion"] = 1
-        len_pos=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==2]))
-        len_neg=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==0]))
-        len_neu=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==1]))
+        if(regression):
+            # self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([0]), "emotion"] = 7
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([1,2,3,5]), "emotion"] = -1
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([4,6]), "emotion"] = 1
+            # self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([7]), "emotion"] = 1
+            len_pos=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==1]))
+            len_neg=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==-1]))
+            len_neu=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==0]))
+            
+            self.sentiment_sentences_df_tofilter = self.sentiment_sentences_df[self.sentiment_sentences_df['emotion'] == 0]
+        else:
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([0]), "emotion"] = 7
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([1,2,3,5]), "emotion"] = 0
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([4,6]), "emotion"] = 2
+            self.sentiment_sentences_df.loc[self.sentiment_sentences_df['emotion'].isin([7]), "emotion"] = 1
+            len_pos=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==2]))
+            len_neg=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==0]))
+            len_neu=(len(self.sentiment_sentences_df[self.sentiment_sentences_df['emotion']==1]))
         
-        self.sentiment_sentences_df_tofilter = self.sentiment_sentences_df[self.sentiment_sentences_df['emotion'] == 1]
+            self.sentiment_sentences_df_tofilter = self.sentiment_sentences_df[self.sentiment_sentences_df['emotion'] == 1]
         # print(len(self.sentiment_sentences_df_tofilter))
         np.random.seed(42)
         index_tofilter = np.random.choice(self.sentiment_sentences_df_tofilter.index,(len_neu-len_pos-len_neg), replace=False)
@@ -86,11 +97,19 @@ class DialogData(data.Dataset):
         if voc_init_cache:
             self.create_vocab_senti()
             self.vocab_senti = sorted(self.vocab_senti)
-            with open("vocabulary_senti.pkl", "wb") as file:
-                pickle.dump(self.vocab_senti, file)
+            if(regression):
+                with open("vocabulary_senti_regression.pkl", "wb") as file:
+                    pickle.dump(self.vocab_senti, file)
+            else:
+                with open("vocabulary_senti_classifier.pkl", "wb") as file:
+                    pickle.dump(self.vocab_senti, file)
         else:
             self.load_vocab_senti()
             self.vocab_senti = sorted(self.vocab_senti)
+        
+        self.vocab_senti.append(self.unk_token)
+        self.vocab_senti.append(self.start_token)
+        self.vocab_senti.append(self.end_token)
             
         for idx, word in enumerate(self.vocab_senti):
             self.voc_dict[word] = idx
@@ -123,13 +142,13 @@ class DialogData(data.Dataset):
             except:
                 raise Exception('Unknown error occured')
             
-        self.vocab_senti.append(self.unk_token)
-        self.vocab_senti.append(self.start_token)
-        self.vocab_senti.append(self.end_token)
         return
     
     def load_vocab_senti(self):
-        path_vocab = os.path.join(os.getcwd(), 'vocabulary_senti.pkl')
+        if(self.regression):
+            path_vocab = os.path.join(os.getcwd(), 'vocabulary_senti_regression.pkl')
+        else:
+            path_vocab = os.path.join(os.getcwd(), 'vocabulary_senti_classifier.pkl')
         if os.path.exists(path_vocab):
             # Load the object back from the file
             with open(path_vocab, "rb") as file:
@@ -183,49 +202,3 @@ class DialogData(data.Dataset):
         X = torch.tensor(self.X[index], dtype=torch.int)
         y = torch.tensor(int(self.y[index]), dtype=torch.int)
         return X, y
-    
-def trimRareWords(voc, pairs, MIN_COUNT):
-    # Trim words used under the MIN_COUNT from the voc
-    voc.trim(MIN_COUNT)
-    # Filter out pairs with trimmed words
-    keep_pairs = []
-    for pair in pairs:
-        input_sentence = pair[0]
-        output_sentence = pair[1]
-        keep_input = True
-        keep_output = True
-        # Check input sentence
-        for word in input_sentence.split(' '):
-            if word not in voc.word2index:
-                keep_input = False
-                break
-        # Check output sentence
-        for word in output_sentence.split(' '):
-            if word not in voc.word2index:
-                keep_output = False
-                break
-
-        # Only keep pairs that do not contain trimmed word(s) in their input or output sentence
-        if keep_input and keep_output:
-            keep_pairs.append(pair)
-
-    print("Trimmed from {} pairs to {}, {:.4f} of total".format(len(pairs), len(keep_pairs), len(keep_pairs) / len(pairs)))
-    return keep_pairs
-
-def indexesFromSentence(voc, sentence):
-    return [voc.word2index[word] for word in sentence.split(' ')] + [EOS_token]
-
-
-def zeroPadding(l, fillvalue=PAD_token):
-    return list(itertools.zip_longest(*l, fillvalue=fillvalue))
-
-def binaryMatrix(l, value=PAD_token):
-    m = []
-    for i, seq in enumerate(l):
-        m.append([])
-        for token in seq:
-            if token == PAD_token:
-                m[i].append(0)
-            else:
-                m[i].append(1)
-    return m

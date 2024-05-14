@@ -21,41 +21,54 @@ if torch.cuda.is_available():
     device = torch.device('cuda')
 print(device)
 
-def evaluate(optimizer, logger, data_settings, model, dataloader, mode):
+def evaluate(optimizer, logger, data_settings, model, dataloader, mode, regression=False):
     model.eval()
     num_outputs = data_settings['num_output']
     true_labels = []
     predicted_labels = []
-    
+    total_loss = 0
     with torch.no_grad():
         for X,y in dataloader:
             X, y = X.to(device), y.to(device)
             ypred = model(X)
-            
-            ypred = torch.argmax(ypred, axis=1, keepdims=False)
-            
-            true_labels.append(y.item())
-            predicted_labels.append(ypred.item())
+            if regression:
+                loss = F.mse_loss(ypred, y)
+                total_loss += loss
+            else:
+                ypred = torch.argmax(ypred, axis=1, keepdims=False)
+                
+                true_labels.append(y.item())
+                predicted_labels.append(ypred.item())
             
     # Get Recall score and precision score
-    overall_accuracy = accuracy_score(true_labels, predicted_labels)
-    precision = precision_score(true_labels, predicted_labels, average='weighted')
-    recall = recall_score(true_labels, predicted_labels, average='weighted')
+    if(regression):
+        avg_loss = total_loss/len(dataloader)
+        print(mode)
+        print("Overall loss = {0:.4f}".format(avg_loss))
+        
+        logger.log({f"{mode} Average Loss": avg_loss })
+    else:
+        overall_accuracy = accuracy_score(true_labels, predicted_labels)
+        precision = precision_score(true_labels, predicted_labels, average='weighted')
+        recall = recall_score(true_labels, predicted_labels, average='weighted')
     
-    logger.log({f"{mode} Overall Accuracy": overall_accuracy,
-                f"{mode} Precision": precision,
-                f"{mode} Recall": recall,
-    })
-    print(mode)
-    print("Overall accuracy = {0:.4f}, precision = {1:.4f}, recall={2:.4f}".format(overall_accuracy, precision, recall))
+        logger.log({f"{mode} Overall Accuracy": overall_accuracy,
+                    f"{mode} Precision": precision,
+                    f"{mode} Recall": recall,
+        })
+        print(mode)
+        print("Overall accuracy = {0:.4f}, precision = {1:.4f}, recall={2:.4f}".format(overall_accuracy, precision, recall))
     # print(true_labels[:64],'\n',predicted_labels[:64])
     return overall_accuracy,precision
             
 def train(data_settings, model_settings, train_settings):
-    voc_init='True'
-    dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings['max_seq'])
-    _,y=dialogdata.prepare_dataloader()
+    voc_init=data_settings['voc_init']
+    regression = model_settings['regression']
+    dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings['max_seq'], regression=regression)
     
+    
+    # Dataloader preprocessing
+    _,y=dialogdata.prepare_dataloader()
     data_len = len(dialogdata.X)
     num_outputs = data_settings['num_output']
     train_len = int(data_len*data_settings['train_size'])
@@ -64,11 +77,12 @@ def train(data_settings, model_settings, train_settings):
     
     
     
-    # Set Class weights
-    weightclass = [len(y)/(num_outputs*y.count(a)) for a in range(num_outputs)]
-    weightclass = torch.tensor(weightclass)
-    
-    weightclass = weightclass.to(device)
+    # Set Class weights for classification
+    if(not regression):
+        weightclass = [len(y)/(num_outputs*y.count(a)) for a in range(num_outputs)]
+        weightclass = torch.tensor(weightclass)
+        
+        weightclass = weightclass.to(device)
     
     train_dataset,test_dataset,val_dataset=random_split(dialogdata, [train_len, test_len, val_len])
     train_dataloader = DataLoader(train_dataset, batch_size=data_settings['batch_size'], shuffle=True)
@@ -79,7 +93,7 @@ def train(data_settings, model_settings, train_settings):
     my_lstm = SentimentLSTM(vocab_senti_size=dialogdata.len_voc_keys, embedding_dim=model_settings['embedding_dim'],
                             output_size=data_settings['num_output'], lstm_hidden_dim=model_settings['lstm_hidden_dim'], hidden_dim=model_settings['hidden_dim'],
                             hidden_dim2=model_settings['hidden_dim2'],n_layers=model_settings['n_layers'],
-                            drop_prob=model_settings['drop_prob'])
+                            drop_prob=model_settings['drop_prob'], regression=regression)
     
     my_lstm = my_lstm.to(device)
     optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings['learning_rate'])
@@ -89,7 +103,10 @@ def train(data_settings, model_settings, train_settings):
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
-    model_name = 'Baseline_LSTM'
+    if regression:
+        model_name = 'Baseline_LSTM_Regressor'
+    else:
+        model_name = 'Baseline_LSTM_Classifier'
     filename = f"{model_name}_ckpt_.pth"
     
     # Variables to compare testing and validation accuracy FOR CHECKPOINTS ONLY
@@ -112,7 +129,11 @@ def train(data_settings, model_settings, train_settings):
             X, y = X.to(device), y.to(device)
             ypred = my_lstm(X)
             
-            loss = F.cross_entropy(ypred, y.long(), weight=weightclass)
+            if(regression):
+                loss = F.mse_loss(ypred, y.unsqueeze(1).float())
+            else:
+                loss = F.cross_entropy(ypred, y.long(), weight=weightclass)
+                
             loss.backward()
             optimizer.step()
             total_loss+=loss
@@ -144,7 +165,7 @@ def main():
 
     # Access and use the settings as needed
     data_settings = settings.get('data_senti', {})
-    model_settings = settings.get('senti_model', {})
+    model_settings = settings.get('model_senti', {})
     train_settings = settings.get('train_senti', {})
 
     train(data_settings, model_settings, train_settings)
