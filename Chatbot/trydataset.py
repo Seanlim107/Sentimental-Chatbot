@@ -1,3 +1,7 @@
+# THis module includes important utilities.
+# Running it creates the train validation split
+# -> by loading from data/movie-corpus
+# -> and saving in data/splits
 import os
 import json
 import random
@@ -216,20 +220,28 @@ def loadPrepareData(corpus, corpus_name, datafile, save_dir, MAX_LENGTH=10, init
 
 # Main script to process and save data
 if __name__ == "__main__":
+    # Load lines and conversations
     lines, conversations = loadLinesAndConversations(os.path.join(corpus, "utterances.jsonl"))
+
+    # Split conversations into training and test sets
     train_conversations, test_conversations = createTrainTestSplit(conversations)
-    
+
+    # Extract Q-A pairs from training and test conversations
     train_pairs = extractSentencePairs(train_conversations)
     test_pairs = extractSentencePairs(test_conversations)
 
+    # Process and save vocabulary and pairs
     save_dir = os.path.join("data", "splits")
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
-    
-    voc, train_pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, MAX_LENGTH=10)
-    _, test_pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, MAX_LENGTH=10)
-    
-    # Save conversations and pairs to separate files
+
+    # Create Voc object and add training pairs
+    voc = Voc(corpus_name)
+    for pair in train_pairs + test_pairs:
+        voc.addSentence(pair[0])
+        voc.addSentence(pair[1])
+
+    # Save training conversations, test conversations, and processed pairs
     with open(os.path.join(save_dir, "train_conversations.json"), 'w') as f:
         json.dump(train_conversations, f)
     with open(os.path.join(save_dir, "test_conversations.json"), 'w') as f:
@@ -238,10 +250,14 @@ if __name__ == "__main__":
         json.dump(train_pairs, f)
     with open(os.path.join(save_dir, "test_pairs.json"), 'w') as f:
         json.dump(test_pairs, f)
-    
+
     # Save vocabulary
     saveVoc(voc, os.path.join(save_dir, "voc.json"))
 
     print(f"Number of conversations in the training set: {len(train_conversations)}")
     print(f"Number of conversations in the test set: {len(test_conversations)}")
+    
+    print(f"Number of training pairs: {len(train_pairs)}")
+    print(f"Number of test pairs: {len(test_pairs)}")
+
 
