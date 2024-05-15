@@ -63,7 +63,8 @@ def evaluateLoop(data_settings, model_settings, train_settings):
         input_sentence = torch.tensor(input_sentence, dtype=torch.int)
         input_sentence = input_sentence.unsqueeze(0)
         ypred = my_lstm(input_sentence)
-        
+        if(not regression):
+            ypred = torch.argmax(ypred, axis=1, keepdims=False) -1
         print(ypred)
         
     
