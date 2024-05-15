@@ -42,3 +42,4 @@ train_ende:
   train_batches_per_val: 80
   val_batches_per_epoch: 20
   save_every: 100
+  print_every: 100
