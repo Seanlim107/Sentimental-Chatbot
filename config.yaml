@@ -39,5 +39,6 @@ train_ende:
   teacher_forcing_ratio: 1.0
   decoder_learning_ratio: 5.0
   n_iteration: 10000
-  print_every: 1
+  train_batches_per_val: 80
+  val_batches_per_epoch: 20
   save_every: 100
