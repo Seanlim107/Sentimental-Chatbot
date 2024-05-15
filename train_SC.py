@@ -15,10 +15,12 @@ import math
 import json
 import os
 from Chatbot.logger import Logger
-from Chatbot.utils import parse_arguments, read_settings, load_checkpoint, save_checkpoint
-from Chatbot.dataset import inputVar, outputVar, batch2TrainData, indexesFromSentence, zeroPadding, binaryMatrix, trimRareWords, printLines, loadLinesAndConversations, extractSentencePairs, Voc, unicodeToAscii, normalizeString, readVocs, filterPair, filterPairs, loadPrepareData
+from Chatbot.utils import read_settings
+from Chatbot.dataset import Voc, batch2TrainData, normalizeString, indexesFromSentence
 from Chatbot.models import EncoderRNN, Attn, LuongAttnDecoderRNN, GreedySearchDecoder
-from Chatbot.train_test_funcs import maskNLLLoss, train, trainIters, evaluate, evaluateInput
+from Chatbot.train_test_funcs import evaluateInput
+
+
 USE_CUDA = torch.cuda.is_available()
 device = torch.device("cuda" if USE_CUDA else "cpu")
 

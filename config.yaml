@@ -12,7 +12,7 @@ model_senti:
   hidden_dim2: 128
   n_layers: 3
   drop_prob: 0.5
-  regression: False
+  regression: True
   
 train_senti:
     epochs: 500
@@ -25,20 +25,23 @@ data_ende:
   min_seq: 3
 
 model_ende: 
-  hidden_dim: 500
-  use_attention: True
+  hidden_dim: 512
+  lstm: False # RNN if False
+  use_attention: False
+  attn_method: 0 # 0 = dot, # 1 = general # 2 = concat
   encoder_num_layers: 2
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 32000 # from which to restart 
+  checkpoint_iter: 320000 # from which to restart 
   
 train_ende:
   lr: 0.0001
   clip: 50
   teacher_forcing_ratio: 1.0
   decoder_learning_ratio: 5.0
-  n_iteration: 10000
-  train_batches_per_val: 80
-  val_batches_per_epoch: 20
-  save_every: 100
+  n_iteration: 320000
+  # train_batches_per_val: 80
+  # val_batches_per_epoch: 20
+  save_every: 40000
+  print_every: 1

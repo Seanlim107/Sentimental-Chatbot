@@ -98,7 +98,12 @@ input_variable, lengths, target_variable, mask, max_target_len = batches
 # print("max_target_len:", max_target_len)
 
 # Configure models
-model_name = 'LSTM_noatt_dot'
+ende_mode = 'LSTM' if model_settings['lstm'] else 'GRU'
+attn_mode = 'Att' if model_settings['use_attention'] else 'NoAtt' 
+attn_method_mode_list = ['dot', 'general', 'concat']
+attn_method_mode = attn_method_mode_list[model_settings['attn_method']]
+model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
+attn_mode = ['dot', 'general', 'concat']
 attn_model = 'dot'
 #``attn_model = 'general'``
 #``attn_model = 'concat'``
@@ -112,7 +117,7 @@ batch_size = data_settings['batch_size']
 checkpoint_iter = model_settings['checkpoint_iter']
 
 loadFilename = os.path.join(save_dir, model_name,
-                    '{}_checkpoint.tar'.format(checkpoint_iter))
+                    '{}_{}_{}_{}checkpoint.tar'.format(ende_mode, attn_mode, attn_method_mode, checkpoint_iter))
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
     # If loading on same machine the model was trained on
@@ -132,8 +137,20 @@ print('Building encoder and decoder ...')
 embedding = nn.Embedding(voc.num_words, hidden_size)
     
 # Initialize encoder & decoder models
-encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM')
-decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+# SimpleDecoderRNN
+if(model_settings['lstm']):
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM') #GRU
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+else:
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='GRU') #GRU
+
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU') #GRU
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
 if os.path.exists(loadFilename):
     embedding.load_state_dict(embedding_sd)
     encoder.load_state_dict(encoder_sd)

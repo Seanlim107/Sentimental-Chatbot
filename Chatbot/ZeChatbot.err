@@ -2,14 +2,7 @@
  |
  [0;32mOK[0m
 wandb: Appending key for api.wandb.ai to your netrc file: /users/adfx758/.netrc
-wandb: Currently logged in as: fabulouspidgeon (sean-lim). Use `wandb login --relogin` to force relogin
-wandb: Tracking run with wandb version 0.17.0
-wandb: Run data is saved locally in /users/adfx758/Sentimental-Chatbot/Chatbot/wandb/run-20240508_115231-ta3vm29g
-wandb: Run `wandb offline` to turn off syncing.
-wandb: Syncing run logger-inm706_chatbot_chatbot
-wandb: ⭐️ View project at https://wandb.ai/sean-lim/inm706_CW
-wandb: 🚀 View run at https://wandb.ai/sean-lim/inm706_CW/runs/ta3vm29g
-wandb: - 0.007 MB of 0.007 MB uploadedwandb: \ 0.007 MB of 0.007 MB uploadedwandb: | 0.007 MB of 0.008 MB uploadedwandb: / 0.008 MB of 0.008 MB uploadedwandb: 🚀 View run logger-inm706_chatbot_chatbot at: https://wandb.ai/sean-lim/inm706_CW/runs/ta3vm29g
-wandb: ⭐️ View project at: https://wandb.ai/sean-lim/inm706_CW
-wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
-wandb: Find logs at: ./wandb/run-20240508_115231-ta3vm29g/logs
+Traceback (most recent call last):
+  File "/users/adfx758/Sentimental-Chatbot/Chatbot/train.py", line 143, in <module>
+    if(train_settings['use_attention']):
+KeyError: 'use_attention'
