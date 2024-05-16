@@ -74,22 +74,23 @@ with open(datafile, 'w', encoding='utf-8') as outputfile:
 
 # Load/Assemble voc and pairs
 save_dir = os.path.join("data", "checkpoints")
-voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
+voc = Voc(datafile)
+# voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
 # Print some pairs to validate
-print("\npairs:")
-for pair in pairs[:10]:
-    print(pair)
+# print("\npairs:")
+# for pair in pairs[:10]:
+#     print(pair)
     
     
 MIN_COUNT = data_settings['min_seq']
 
 # Trim voc and pairs
-pairs = trimRareWords(voc, pairs, MIN_COUNT)
+# pairs = trimRareWords(voc, pairs, MIN_COUNT)
 
 # Example for validation
-small_batch_size = 5
-batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_size)])
-input_variable, lengths, target_variable, mask, max_target_len = batches
+# small_batch_size = 5
+# batches = batch2TrainData(voc, [random.choice(pairs) for _ in range(small_batch_size)])
+# input_variable, lengths, target_variable, mask, max_target_len = batches
 
 # print("input_variable:", input_variable)
 # print("lengths:", lengths)
@@ -103,7 +104,6 @@ attn_mode = 'Att' if model_settings['use_attention'] else 'NoAtt'
 attn_method_mode_list = ['dot', 'general', 'concat']
 attn_method_mode = attn_method_mode_list[model_settings['attn_method']]
 model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
-attn_mode = ['dot', 'general', 'concat']
 attn_model = 'dot'
 #``attn_model = 'general'``
 #``attn_model = 'concat'``
@@ -118,6 +118,24 @@ checkpoint_iter = model_settings['checkpoint_iter']
 
 loadFilename = os.path.join(save_dir, model_name,
                     '{}_{}_{}_{}checkpoint.tar'.format(ende_mode, attn_mode, attn_method_mode, checkpoint_iter))
+
+print(f"Loading model from: {loadFilename}")
+# Load model if a ``loadFilename`` is provided
+if os.path.exists(loadFilename):
+    print('Checkpoint Detected')
+    # If loading on same machine the model was trained on
+    checkpoint = torch.load(loadFilename, map_location=device)
+    # If loading a model trained on GPU to CPU
+    #checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
+    encoder_sd = checkpoint['en']
+    decoder_sd = checkpoint['de']
+    encoder_optimizer_sd = checkpoint['en_opt']
+    decoder_optimizer_sd = checkpoint['de_opt']
+    embedding_sd = checkpoint['embedding']
+    voc.__dict__ = checkpoint['voc_dict']
+else:
+    print(f'Checkpoint {loadFilename} not detected, starting from scratch')
+    voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
     # If loading on same machine the model was trained on

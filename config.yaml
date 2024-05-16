@@ -3,7 +3,7 @@ data_senti:
   train_size: 0.8
   batch_size: 16
   num_output: 3
-  voc_init: True
+  voc_init: False
 
 model_senti:
   embedding_dim: 512
@@ -20,20 +20,20 @@ train_senti:
 
 data_ende:
   max_seq: 10
-  train_size: 0.8
+  train_size: 0.9
   batch_size: 64
   min_seq: 3
 
 model_ende: 
   hidden_dim: 512
-  lstm: False # RNN if False
-  use_attention: False
+  lstm: True # RNN if False
+  use_attention: True
   attn_method: 0 # 0 = dot, # 1 = general # 2 = concat
   encoder_num_layers: 2
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 320000 # from which to restart 
+  checkpoint_iter: 200000 # from which to restart 
   
 train_ende:
   lr: 0.0001
@@ -45,4 +45,3 @@ train_ende:
   # val_batches_per_epoch: 20
   save_every: 40000
   print_every: 1
-  print_every: 100

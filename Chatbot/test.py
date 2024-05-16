@@ -53,7 +53,11 @@ save_dir = os.path.join(filepath, "data", "checkpoints")
 voc = Voc(datafile)
 
 # Configure models
-model_name = 'LSTM_noatt_dot'
+ende_mode = 'LSTM' if model_settings['lstm'] else 'GRU'
+attn_mode = 'Att' if model_settings['use_attention'] else 'NoAtt' 
+attn_method_mode_list = ['dot', 'general', 'concat']
+attn_method_mode = attn_method_mode_list[model_settings['attn_method']]
+model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
 attn_model = 'dot'
 #``attn_model = 'general'``
 #``attn_model = 'concat'``
@@ -66,7 +70,9 @@ batch_size = data_settings['batch_size']
 # Set checkpoint to load from; set to None if starting from scratch
 checkpoint_iter = model_settings['checkpoint_iter']
 
-loadFilename = os.path.join(save_dir, model_name, "900_checkpoint.tar")
+
+loadFilename = os.path.join(save_dir, model_name,
+                    '{}_checkpoint.tar'.format(checkpoint_iter))
 print(f"Loading model from: {loadFilename}")
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
@@ -81,7 +87,9 @@ if os.path.exists(loadFilename):
     decoder_optimizer_sd = checkpoint['de_opt']
     embedding_sd = checkpoint['embedding']
     voc.__dict__ = checkpoint['voc_dict']
+    print(voc.num_words)
 else:
+    raise Exception('No Checkpoint detected')
     print(f'Checkpoint {loadFilename} not detected, starting from scratch')
     voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
 
@@ -89,8 +97,22 @@ else:
 embedding = nn.Embedding(voc.num_words, hidden_size)
 
 # Initialize encoder & decoder models
-encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM')
-decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+# encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM')
+# decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+
+if(model_settings['lstm']):
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM') #GRU
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+else:
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='GRU') #GRU
+
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU') #GRU
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
 
 
 if os.path.exists(loadFilename):
