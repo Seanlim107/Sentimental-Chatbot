@@ -87,5 +87,3 @@ def main():
     evaluateLoop(data_settings, model_settings, train_settings)
     
     
-if __name__ == '__main__':
-    main()

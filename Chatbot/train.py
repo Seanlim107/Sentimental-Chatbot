@@ -30,15 +30,18 @@ SOS_token = 1  # Start-of-sentence token
 EOS_token = 2  # End-of-sentence token
 
 corpus_name = "movie-corpus"
-corpus = os.path.join('data',corpus_name)
 
-# Define path to new file
-datafile = os.path.join(corpus, "formatted_movie_lines.txt")
+
+
 
 args = parse_arguments()
 # print(args)
 # Read settings from the YAML file
 filepath=os.path.dirname(os.path.realpath(__file__))
+corpus = os.path.join(filepath,'data',corpus_name)
+
+# Define path to new file
+datafile = os.path.join(corpus, "formatted_movie_lines.txt")
 settings = read_settings(filepath+args.config)
 
 # Access and use the settings as needed
@@ -62,10 +65,10 @@ lines, conversations = loadLinesAndConversations(os.path.join(corpus, "utterance
 
 # Write new csv file
 # print("\nWriting newly formatted file...")
-with open(datafile, 'w', encoding='utf-8') as outputfile:
-    writer = csv.writer(outputfile, delimiter=delimiter, lineterminator='\n')
-    for pair in extractSentencePairs(conversations):
-        writer.writerow(pair)
+# with open(datafile, 'w', encoding='utf-8') as outputfile:
+#     writer = csv.writer(outputfile, delimiter=delimiter, lineterminator='\n')
+#     for pair in extractSentencePairs(conversations):
+#         writer.writerow(pair)
 
 # Print a sample of lines
 # print("\nSample lines from file:")
@@ -74,8 +77,9 @@ with open(datafile, 'w', encoding='utf-8') as outputfile:
 
 # Load/Assemble voc and pairs
 save_dir = os.path.join("data", "checkpoints")
-voc = Voc(datafile)
-# voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
+save_dir_corpus = os.path.join("data", "movie-corpus")
+# voc = Voc(datafile)
+voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_corpus, data_settings['max_seq'])
 # Print some pairs to validate
 # print("\npairs:")
 # for pair in pairs[:10]:
@@ -116,8 +120,8 @@ batch_size = data_settings['batch_size']
 # Set checkpoint to load from; set to None if starting from scratch
 checkpoint_iter = model_settings['checkpoint_iter']
 
-loadFilename = os.path.join(save_dir, model_name,
-                    '{}_{}_{}_{}checkpoint.tar'.format(ende_mode, attn_mode, attn_method_mode, checkpoint_iter))
+loadFilename = os.path.join(filepath, save_dir, model_name,
+                    '{}_checkpoint.tar'.format(checkpoint_iter))
 
 print(f"Loading model from: {loadFilename}")
 # Load model if a ``loadFilename`` is provided
@@ -135,11 +139,11 @@ if os.path.exists(loadFilename):
     voc.__dict__ = checkpoint['voc_dict']
 else:
     print(f'Checkpoint {loadFilename} not detected, starting from scratch')
-    voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
+    # voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir, data_settings['max_seq'])
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
     # If loading on same machine the model was trained on
-    checkpoint = torch.load(loadFilename)
+    checkpoint = torch.load(loadFilename, map_location = device)
     # If loading a model trained on GPU to CPU
     #checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
     encoder_sd = checkpoint['en']

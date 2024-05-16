@@ -1,5 +1,5 @@
 data_senti:
-  max_seq: 10
+  max_seq: 3
   train_size: 0.8
   batch_size: 16
   num_output: 3
@@ -26,16 +26,17 @@ data_ende:
 
 model_ende: 
   hidden_dim: 512
-  lstm: True # RNN if False
+  lstm: False # RNN if False
   use_attention: True
-  attn_method: 0 # 0 = dot, # 1 = general # 2 = concat
+  attn_method: 2 # 0 = dot, # 1 = general # 2 = concat
   encoder_num_layers: 2
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 200000 # from which to restart 
+  checkpoint_iter: 0 # from which to restart 
   
 train_ende:
+  emotion: 1 # -1, 0, 1
   lr: 0.0001
   clip: 50
   teacher_forcing_ratio: 1.0
@@ -43,5 +44,5 @@ train_ende:
   n_iteration: 320000
   # train_batches_per_val: 80
   # val_batches_per_epoch: 20
-  save_every: 40000
+  save_every: 4000
   print_every: 1
