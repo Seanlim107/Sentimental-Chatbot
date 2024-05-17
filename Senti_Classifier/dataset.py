@@ -202,3 +202,7 @@ class DialogData(data.Dataset):
         X = torch.tensor(self.X[index], dtype=torch.int)
         y = torch.tensor(int(self.y[index]), dtype=torch.int)
         return X, y
+    
+    
+# testdataset = DialogData(10)
+# print(testdataset.sentiment_sentences_df)

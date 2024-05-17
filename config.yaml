@@ -33,7 +33,7 @@ model_ende:
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 0 # from which to restart 
+  checkpoint_iter: 100000 # from which to restart 
   
 train_ende:
   emotion: 1 # -1, 0, 1

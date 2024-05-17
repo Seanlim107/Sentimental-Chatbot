@@ -10,7 +10,8 @@ Baseline_chatbot/helpme.code-workspace
 Baseline_chatbot2/data
 
 Chatbot/.ipynb_checkpoints/
-Chatbot/data
+Chatbot/data/
+SC_data/
 Senti_Classifier/Baseline_LSTM_Regressor_ckpt_.pth
 Senti_Classifier/Baseline_LSTM_Classifier_ckpt_.pth
 Senti_Classifier/vocabulary_senti_classifier.pkl

@@ -55,17 +55,35 @@ configpath =  '/config.yaml'
 def main():
     settings = read_settings(filepath+configpath)
 
+    # _______________________Everything Chatbot____________________________
     # Access and use the settings as needed
     data_settings_chatbot = settings.get('data_ende', {})
     model_settings_chatbot = settings.get('model_ende', {})
     train_settings_chatbot = settings.get('train_ende', {})
-    MAX_LENGTH = data_settings_chatbot['max_seq']  # Maximum sentence length to consider
+    
+    # Maximum sentence length to consider
+    MAX_LENGTH = data_settings_chatbot['max_seq'] 
+    data_settings_senti = settings.get('data_senti', {})
+    model_settings_senti = settings.get('model_senti', {})
+    train_settings_senti = settings.get('train_senti', {})
+
+    voc_init=data_settings_senti['voc_init']
+    regression = model_settings_senti['regression']
+    if regression:
+        senti_model_name = 'Baseline_LSTM_Regressor'
+    else:
+        senti_model_name = 'Baseline_LSTM_Classifier'
     # print(MAX_LENGTH)
 
     # # Load/Assemble voc and pairs
-    save_dir = os.path.join(chatbot_filepath, "data", "checkpoints")
+    save_dir = os.path.join(filepath, "SC_data", "checkpoints")
     voc = Voc(datafile)
-
+    save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
+    # voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
+    if regression:
+        senti_model_name = 'Baseline_LSTM_Regressor'
+    else:
+        senti_model_name = 'Baseline_LSTM_Classifier'
     # Configure models
     ende_mode = 'LSTM' if model_settings_chatbot['lstm'] else 'GRU'
     attn_mode = 'Att' if model_settings_chatbot['use_attention'] else 'NoAtt' 
@@ -86,7 +104,7 @@ def main():
     checkpoint_iter = model_settings_chatbot['checkpoint_iter']
 
     loadFilename = os.path.join(save_dir, model_name,
-                        '{}_checkpoint.tar'.format(checkpoint_iter))
+                        '{},{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
     # Load model if a ``loadFilename`` is provided
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
@@ -100,8 +118,10 @@ def main():
         decoder_optimizer_sd = checkpoint['de_opt']
         embedding_sd = checkpoint['embedding']
         voc.__dict__ = checkpoint['voc_dict']
+        
+        
     else:
-        raise Exception('Checkpoint must exist for Chatbot')
+        print('No Checkpoint, Starting from scratch')
 
     # Initialize word embeddings
     embedding = nn.Embedding(voc.num_words, hidden_size)
@@ -137,57 +157,43 @@ def main():
     print('Models built and ready to go!')
 
     # Configure training/optimization
-    clip = train_settings_chatbot['clip']
-    teacher_forcing_ratio = train_settings_chatbot['teacher_forcing_ratio']
     learning_rate = train_settings_chatbot['lr']
     decoder_learning_ratio = train_settings_chatbot['decoder_learning_ratio']
-    n_iteration = train_settings_chatbot['n_iteration']
-    print_every = train_settings_chatbot['print_every']
-    save_every = train_settings_chatbot['save_every']
 
 
     # Ensure dropout layers are in train mode
-    # encoder.train()
-    # decoder.train()
+    encoder.eval()
+    decoder.eval()
 
     # Initialize optimizers
-    print('Building optimizers ...')
-    encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
-    decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
-    if loadFilename:
-        encoder_optimizer.load_state_dict(encoder_optimizer_sd)
-        decoder_optimizer.load_state_dict(decoder_optimizer_sd)
-        print('Optimizers built!')
+    # print('Building optimizers ...')
+    # encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
+    # decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
+    # if os.path.exists(loadFilename):
+    #     encoder_optimizer.load_state_dict(encoder_optimizer_sd)
+    #     decoder_optimizer.load_state_dict(decoder_optimizer_sd)
+    #     print('Optimizers built!')
 
     # If you have CUDA, configure CUDA to call
-    for state in encoder_optimizer.state.values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.to(device)
+    # for state in encoder_optimizer.state.values():
+    #     for k, v in state.items():
+    #         if isinstance(v, torch.Tensor):
+    #             state[k] = v.to(device)
 
-    for state in decoder_optimizer.state.values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.to(device)
+    # for state in decoder_optimizer.state.values():
+    #     for k, v in state.items():
+    #         if isinstance(v, torch.Tensor):
+    #             state[k] = v.to(device)
 
     searcher = GreedySearchDecoder(encoder, decoder)
+    # _______________________Everything Chatbot____________________________
 
-
-    # Everything Sentimental Classifier
+    # ________________Everything Sentimental Classifier____________________
 
     # Access and use the settings as needed
-    data_settings_senti = settings.get('data_senti', {})
-    model_settings_senti = settings.get('model_senti', {})
-    train_settings_senti = settings.get('train_senti', {})
-
-    voc_init=data_settings_senti['voc_init']
-    regression = model_settings_senti['regression']
-    if regression:
-        senti_model_name = 'Baseline_LSTM_Regressor'
-    else:
-        senti_model_name = 'Baseline_LSTM_Classifier'
-    senti_filedir = os.path.join(filepath, 'Senti_Classifier')
-    senti_filename = os.path.join(senti_filedir, f"{senti_model_name}_ckpt_.pth")
+    
+    # senti_filedir = os.path.join(filepath, 'Senti_Classifier')
+    # senti_filename = os.path.join(senti_filedir, f"{senti_model_name}_ckpt_.pth")
     dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings_senti['max_seq'], regression=regression)
 
     senti_voc = dialogdata.voc_keys
@@ -207,11 +213,15 @@ def main():
     ckpt_epoch = 0
 
 
-    if os.path.exists(senti_filename):
+    if os.path.exists(loadFilename):
         if(regression):
-            ckpt_epoch, min_test_loss, min_valid_loss, senti_voc = load_checkpoint_reg(my_lstm, optimizer, min_test_loss, min_valid_loss, senti_filename, senti_voc)
+            my_lstm.load_state_dict(checkpoint['senti_state_dict'])
+            senti_voc=checkpoint['senti_voc']
+            # ckpt_epoch, min_test_loss, min_valid_loss, senti_voc = load_checkpoint_reg(my_lstm, optimizer, min_test_loss, min_valid_loss, senti_filename, senti_voc)
         else:
-            ckpt_epoch, max_test_acc, max_valid_acc, senti_voc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, senti_filename, senti_voc)
+            my_lstm.load_state_dict(checkpoint['senti_state_dict'])
+            senti_voc=checkpoint['senti_voc']
+            # ckpt_epoch, max_test_acc, max_valid_acc, senti_voc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, senti_filename, senti_voc)
         print(f'Checkpoint detected')
     else:
         raise Exception('No file detected')
@@ -234,7 +244,7 @@ def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm,
             input_ypred_senti = my_lstm(input_sentence_senti)
             if(not regression):
                 input_ypred_senti = torch.argmax(input_ypred_senti, axis=1, keepdims=False) -1
-            print('You Sentiment: ', input_ypred_senti)
+            print('You Sentiment: ', input_ypred_senti.item())
             # Evaluate sentence
             output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
             # Format and print response sentence
@@ -247,7 +257,7 @@ def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm,
             output_ypred_senti = my_lstm(output_sentence_senti)
             if(not regression):
                 output_ypred_senti = torch.argmax(output_ypred_senti, axis=1, keepdims=False) -1
-            print('Bot Sentiment:', output_ypred_senti)
+            print('Bot Sentiment:', output_ypred_senti.item())
             
 
         except KeyError:
