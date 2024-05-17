@@ -65,7 +65,7 @@ def main():
     # print(MAX_LENGTH)
 
     # # Load/Assemble voc and pairs
-    save_dir = os.path.join(filepath, "SC_data", "checkpoints")
+    save_dir = os.path.join(filepath, "SC_data", "checkpoints_improved")
     # voc = Voc(datafile)
     save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
     voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
@@ -151,8 +151,9 @@ def main():
 
 
     # Ensure dropout layers are in train mode
-    # encoder.train()
-    # decoder.train()
+    encoder.train()
+    decoder.train()
+    
 
     # Initialize optimizers
     # print('Building optimizers ...')
@@ -203,6 +204,7 @@ def main():
                             drop_prob=model_settings_senti['drop_prob'], regression=regression)
 
     my_lstm = my_lstm.to(device)
+    # my_lstm.eval()
     optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings_senti['learning_rate'])
     max_test_acc = 0
     max_valid_acc = 0
@@ -253,7 +255,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
     
     
     wandb_logger = Logger(
-        f"inm706_sentiment_chatbot_with_backbones",
+        f"inm706_sentiment_chatbot_with_backprop_ende",
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
@@ -320,7 +322,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
             
         # Determine if we are using teacher forcing this iteration
         use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-
+        sentimental_classifier.eval()
         # Forward batch of sequences through decoder one time step at a time
         if use_teacher_forcing:
             for t in range(max_target_len):
@@ -378,7 +380,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         # Adjust model weights
         encoder_optimizer.step()
         decoder_optimizer.step()
-        senti_optimizer.step()
+        # senti_optimizer.step()
         
         loss_iter_total = sum(print_losses) / n_totals
         # print(loss_iter, n_totals)

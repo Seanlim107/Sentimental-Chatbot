@@ -1,0 +1,26 @@
+[38;5;127mlibs[0m/[38;5;172mnvidia-cuda[0m/[38;5;67m11.2.0[0m/[38;5;68mbin[0m
+ |
+ [0;32mOK[0m
+wandb: Appending key for api.wandb.ai to your netrc file: /users/adfx758/.netrc
+wandb: Currently logged in as: fabulouspidgeon (sean-lim). Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.17.0
+wandb: Run data is saved locally in /users/adfx758/Sentimental-Chatbot/wandb/run-20240517_145341-nf22s7m6
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run logger-inm706_sentiment_chatbot_with_backprop_ende
+wandb: ⭐️ View project at https://wandb.ai/sean-lim/inm706_CW
+wandb: 🚀 View run at https://wandb.ai/sean-lim/inm706_CW/runs/nf22s7m6
+Training Chatbot:   0%|          | 0/100000 [00:00<?, ?it/s]Training Chatbot:   0%|          | 0/100000 [00:01<?, ?it/s]
+Traceback (most recent call last):
+  File "/users/adfx758/Sentimental-Chatbot/train_SC.py", line 454, in <module>
+    main()
+  File "/users/adfx758/Sentimental-Chatbot/train_SC.py", line 227, in main
+    train_sentimental_chatbot(loadFilename, voc, pairs, encoder, decoder, embedding,
+  File "/users/adfx758/Sentimental-Chatbot/train_SC.py", line 339, in train_sentimental_chatbot
+    loss_senti = F.mse_loss(ypred_decoder, emotion_mode.float().to(device))
+  File "/users/adfx758/.pyenv/versions/SentiChatbot/lib/python3.9/site-packages/torch/nn/functional.py", line 3366, in mse_loss
+    return torch._C._nn.mse_loss(expanded_input, expanded_target, _Reduction.get_enum(reduction))
+RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!
+wandb: - 0.005 MB of 0.005 MB uploadedwandb: \ 0.005 MB of 0.007 MB uploadedwandb: | 0.005 MB of 0.008 MB uploadedwandb: 🚀 View run logger-inm706_sentiment_chatbot_with_backprop_ende at: https://wandb.ai/sean-lim/inm706_CW/runs/nf22s7m6
+wandb: ⭐️ View project at: https://wandb.ai/sean-lim/inm706_CW
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240517_145341-nf22s7m6/logs

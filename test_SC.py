@@ -76,7 +76,7 @@ def main():
     # print(MAX_LENGTH)
 
     # # Load/Assemble voc and pairs
-    save_dir = os.path.join(filepath, "SC_data", "checkpoints")
+    save_dir = os.path.join(filepath, "SC_data", "checkpoints_improved")
     voc = Voc(datafile)
     save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
     # voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
@@ -104,7 +104,7 @@ def main():
     checkpoint_iter = model_settings_chatbot['checkpoint_iter']
 
     loadFilename = os.path.join(save_dir, model_name,
-                        '{},{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
+                        '{}_{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
     # Load model if a ``loadFilename`` is provided
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
@@ -121,7 +121,7 @@ def main():
         
         
     else:
-        print('No Checkpoint, Starting from scratch')
+        raise Exception(f'CHeckpoint {loadFilename} not detected')
 
     # Initialize word embeddings
     embedding = nn.Embedding(voc.num_words, hidden_size)

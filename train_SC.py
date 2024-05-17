@@ -65,7 +65,7 @@ def main():
     # print(MAX_LENGTH)
 
     # # Load/Assemble voc and pairs
-    save_dir = os.path.join(filepath, "SC_data", "checkpoints")
+    save_dir = os.path.join(filepath, "SC_data", "checkpoints_improved")
     # voc = Voc(datafile)
     save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
     voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
@@ -109,7 +109,7 @@ def main():
 
     # Initialize word embeddings
     embedding = nn.Embedding(voc.num_words, hidden_size)
-
+    embedding = embedding.to(device)
     # Initialize encoder & decoder models
 
     if(model_settings_chatbot['lstm']):
@@ -151,17 +151,18 @@ def main():
 
 
     # Ensure dropout layers are in train mode
-    # encoder.train()
-    # decoder.train()
+    encoder.train()
+    decoder.train()
+    
 
     # Initialize optimizers
-    print('Building optimizers ...')
+    # print('Building optimizers ...')
     encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
     if os.path.exists(loadFilename):
         encoder_optimizer.load_state_dict(encoder_optimizer_sd)
         decoder_optimizer.load_state_dict(decoder_optimizer_sd)
-        print('Optimizers built!')
+        print('Optimizers Loaded!')
 
     # If you have CUDA, configure CUDA to call
     for state in encoder_optimizer.state.values():
@@ -202,7 +203,8 @@ def main():
                             hidden_dim2=model_settings_senti['hidden_dim2'],n_layers=model_settings_senti['n_layers'],
                             drop_prob=model_settings_senti['drop_prob'], regression=regression)
 
-    my_lstm = my_lstm.to(device)
+    # my_lstm = my_lstm.to(device)
+    # my_lstm.eval()
     optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings_senti['learning_rate'])
     max_test_acc = 0
     max_valid_acc = 0
@@ -212,13 +214,14 @@ def main():
 
 
     if os.path.exists(senti_filename):
+        print(f'Checkpoint detected for Sentimental Classifier')
         if(regression):
             ckpt_epoch, min_test_loss, min_valid_loss, senti_voc = load_checkpoint_reg(my_lstm, optimizer, min_test_loss, min_valid_loss, senti_filename, senti_voc)
         else:
             ckpt_epoch, max_test_acc, max_valid_acc, senti_voc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, senti_filename, senti_voc)
-        print(f'Checkpoint detected')
+        print('Checkpoints loaded for Sentimental Classifier')
     else:
-        raise Exception('No file detected')
+        print('No Checkpoint detected for Sentimental Classifier, starting from scractch')
     # ________________Everything Sentimental Classifier____________________
     
     train_sentimental_chatbot(loadFilename, voc, pairs, encoder, decoder, embedding,
@@ -252,7 +255,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
     
     
     wandb_logger = Logger(
-        f"inm706_sentiment_chatbot_with_backbones",
+        f"inm706_sentiment_chatbot_with_backprop_ende",
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
@@ -319,7 +322,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
             
         # Determine if we are using teacher forcing this iteration
         use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
-
+        sentimental_classifier.eval()
         # Forward batch of sequences through decoder one time step at a time
         if use_teacher_forcing:
             for t in range(max_target_len):
@@ -339,7 +342,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                     
                 # Calculate and accumulate loss
                 mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
-                loss += mask_loss + loss_senti
+                loss += mask_loss + loss_senti.to(device)
                 print_losses.append(mask_loss.item() * nTotal)
                 n_totals += nTotal 
         else:
@@ -366,16 +369,18 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 print_losses.append(mask_loss.item() * nTotal)
                 n_totals += nTotal
         
-        loss.backward()
+        
         # Clip gradients: gradients are modified in place
         _ = nn.utils.clip_grad_norm_(encoder.parameters(), clip_chatbot)
         _ = nn.utils.clip_grad_norm_(decoder.parameters(), clip_chatbot)
-        _ = nn.utils.clip_grad_norm_(sentimental_classifier.parameters(), clip_chatbot)
+        # _ = nn.utils.clip_grad_norm_(sentimental_classifier.parameters(), clip_chatbot)
         
-         # Adjust model weights
+        loss.backward()
+        
+        # Adjust model weights
         encoder_optimizer.step()
         decoder_optimizer.step()
-        senti_optimizer.step()
+        # senti_optimizer.step()
         
         loss_iter_total = sum(print_losses) / n_totals
         # print(loss_iter, n_totals)
@@ -401,13 +406,13 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 'loss': loss,
                 'voc_dict': voc.__dict__,
                 'embedding': embedding.state_dict(),
-            }, os.path.join(directory, '{},{}_{}.tar'.format(model_name, iteration, 'checkpoint')))
+                
+                'senti_state_dict': sentimental_classifier.state_dict(),
+                'senti_optimizer_state': senti_optimizer.state_dict(),
+                'senti_voc': voc_senti
+            }, os.path.join(directory, '{}_{}.tar'.format(iteration, 'checkpoint')))
             print('Checkpoint Saved')
             
- 
-    
-    #_______________________________END OF CHATBOT _____________________________________
-    #_______________________________ BEGIN FOR SENTIMENTAL ANALYSIS ___________________
     
 
     

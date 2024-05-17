@@ -70,9 +70,27 @@ batch_size = data_settings['batch_size']
 # Set checkpoint to load from; set to None if starting from scratch
 checkpoint_iter = model_settings['checkpoint_iter']
 
+ende_mode = 'LSTM' if model_settings['lstm'] else 'GRU'
+attn_mode = 'Att' if model_settings['use_attention'] else 'NoAtt' 
+attn_method_mode_list = ['dot', 'general', 'concat']
+attn_method_mode = attn_method_mode_list[model_settings['attn_method']]
+model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
+directory = os.path.join(save_dir , model_name)
+attn_mode = ['dot', 'general', 'concat']
+attn_model = 'dot'
+#``attn_model = 'general'``
+#``attn_model = 'concat'``
+# filename_sentimental = f"{model_name_chatbot}_{model_name}_ckpt_.pth"
+# iteration = model_settings['n_iteration']
+# chatbot_filename=os.path.join('{}_{}.tar'.format(iteration, 'checkpoint'))
+# checkpoint_filename = '{}_checkpoint.tar'.format(checkpoint_iter)
+
+# Set checkpoint to load from; set to None if starting from scratch
+checkpoint_iter = model_settings['checkpoint_iter']
 
 loadFilename = os.path.join(save_dir, model_name,
-                    '{}_checkpoint.tar'.format(checkpoint_iter))
+                    '{}_{}.tar'.format(checkpoint_iter, 'checkpoint'))
+    
 print(f"Loading model from: {loadFilename}")
 # Load model if a ``loadFilename`` is provided
 if os.path.exists(loadFilename):
