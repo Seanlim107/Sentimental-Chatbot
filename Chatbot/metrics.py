@@ -64,21 +64,7 @@ decoder_n_layers = model_settings['decoder_num_layers']
 dropout = model_settings['dropout']
 batch_size = data_settings['batch_size']
 # embedding = nn.Embedding(voc.num_words, hidden_size)
-embedding = nn.Embedding(7836, hidden_size)
 
-if(model_settings['lstm']):
-    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
-    if(model_settings['use_attention']):
-        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
-    else:
-        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
-else:
-    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='GRU') #GRU
-
-    if(model_settings['use_attention']):
-        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU') 
-    else:
-        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
 save_dir = os.path.join("data", "checkpoints")
 ende_mode = 'LSTM' if model_settings['lstm'] else 'GRU'
 attn_mode = 'Att' if model_settings['use_attention'] else 'NoAtt' 
@@ -103,6 +89,26 @@ if os.path.exists(loadFilename):
     decoder_optimizer_sd = checkpoint['de_opt']
     embedding_sd = checkpoint['embedding']
     voc.__dict__ = checkpoint['voc_dict']
+    print(voc.num_words)
+
+
+
+embedding = nn.Embedding(voc.num_words, hidden_size)
+
+if(model_settings['lstm']):
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='LSTM')
+else:
+    encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='GRU') #GRU
+
+    if(model_settings['use_attention']):
+        decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU') 
+    else:
+        decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
+
     # Checkpoint detected
 if os.path.exists(loadFilename):
     embedding.load_state_dict(embedding_sd)
