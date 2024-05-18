@@ -26,14 +26,14 @@ data_ende:
 
 model_ende: 
   hidden_dim: 512
-  lstm: True # RNN if False
+  lstm: False # RNN if False
   use_attention: True
   attn_method: 0 # 0 = dot, # 1 = general # 2 = concat
   encoder_num_layers: 2
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 0 # from which to restart 
+  checkpoint_iter: 200000 # from which to restart 
   
 train_ende:
   emotion: -1 # -1, 0, 1
