@@ -61,6 +61,9 @@ def main():
     data_settings_chatbot = settings.get('data_ende', {})
     model_settings_chatbot = settings.get('model_ende', {})
     train_settings_chatbot = settings.get('train_ende', {})
+    data_settings_senti = settings.get('data_senti', {})
+    model_settings_senti = settings.get('model_senti', {})
+    train_settings_senti = settings.get('train_senti', {})
     MAX_LENGTH = data_settings_chatbot['max_seq']  # Maximum sentence length to consider
     # print(MAX_LENGTH)
 
@@ -78,6 +81,12 @@ def main():
     model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
     attn_mode = ['dot', 'general', 'concat']
     attn_model = 'dot'
+    
+    regression = model_settings_senti['regression']
+    if regression:
+        senti_model_name = 'Baseline_LSTM_Regressor'
+    else:
+        senti_model_name = 'Baseline_LSTM_Classifier'
     #``attn_model = 'general'``
     #``attn_model = 'concat'``
     hidden_size = model_settings_chatbot['hidden_dim']
@@ -90,7 +99,7 @@ def main():
     checkpoint_iter = model_settings_chatbot['checkpoint_iter']
 
     loadFilename = os.path.join(save_dir, model_name,
-                        '{}_checkpoint.tar'.format(checkpoint_iter))
+                        '{}/{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
     # Load model if a ``loadFilename`` is provided
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
@@ -181,16 +190,10 @@ def main():
     # ________________Everything Sentimental Classifier____________________
 
     # Access and use the settings as needed
-    data_settings_senti = settings.get('data_senti', {})
-    model_settings_senti = settings.get('model_senti', {})
-    train_settings_senti = settings.get('train_senti', {})
+    
 
     voc_init=data_settings_senti['voc_init']
-    regression = model_settings_senti['regression']
-    if regression:
-        senti_model_name = 'Baseline_LSTM_Regressor'
-    else:
-        senti_model_name = 'Baseline_LSTM_Classifier'
+    
     senti_filedir = os.path.join(filepath, 'Senti_Classifier')
     senti_filename = os.path.join(senti_filedir, f"{senti_model_name}_ckpt_.pth")
     dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings_senti['max_seq'], regression=regression)
@@ -221,10 +224,10 @@ def main():
             ckpt_epoch, max_test_acc, max_valid_acc, senti_voc = load_checkpoint(my_lstm, optimizer, max_test_acc, max_valid_acc, senti_filename, senti_voc)
         print('Checkpoints loaded for Sentimental Classifier')
     else:
-        print('No Checkpoint detected for Sentimental Classifier, starting from scractch')
+        raise Exception('Backbone for Sentimental Classifier needed')
     # ________________Everything Sentimental Classifier____________________
     
-    train_sentimental_chatbot(loadFilename, voc, pairs, encoder, decoder, embedding,
+    train_sentimental_chatbot(model_name, voc, pairs, encoder, decoder, embedding,
                               encoder_optimizer, decoder_optimizer, 
                               optimizer, my_lstm, dialogdata,
                               model_settings_chatbot, train_settings_chatbot, data_settings_chatbot,
@@ -241,6 +244,10 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
     voc_senti = dialogdata.len_voc_keys
     
     regression = model_settings_senti['regression']
+    if regression:
+        senti_model_name = 'Baseline_LSTM_Regressor'
+    else:
+        senti_model_name = 'Baseline_LSTM_Classifier'
     batch_size_senti = 1
     batch_size_chatbot = data_settings_chatbot['batch_size']
     clip_chatbot = train_settings_chatbot['clip']
@@ -255,13 +262,15 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
     
     
     wandb_logger = Logger(
-        f"inm706_sentiment_chatbot_with_backprop_ende",
+        f"inm706_sentiment_chatbot_with_backprop_ende_pretrained_regressor",
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
     training_batches = [batch2TrainData(voc, [random.choice(pairs) for _ in range(batch_size_chatbot)])
                       for _ in range(n_iteration)]
     print_loss_total = 0
+    print_loss_total_chatbot = 0
+    print_loss_total_senti = 0
     print('Initializing ...')
     start_iteration = 1
     print_loss = 0
@@ -269,13 +278,8 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         checkpoint = torch.load(loadFilename, map_location=device)
         start_iteration = checkpoint['iteration'] + 1
         print(f'Checkpoint detected, beginning from {start_iteration}')
-    
-    if regression:
-        model_name = 'Baseline_LSTM_Regressor'
-    else:
-        model_name = 'Baseline_LSTM_Classifier'
         
-    filename_sentimental = f"{model_name_chatbot}_{model_name}_ckpt_.pth"
+    # filename_sentimental = f"{model_name_chatbot}_{model_name}_ckpt_.pth"
     
     # Variables to compare testing and validation accuracy FOR CHECKPOINTS ONLY
     min_test_loss = -1
@@ -300,6 +304,8 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         # Initialize variables
         loss = 0
         print_losses = []
+        print_losses_chatbot = []
+        print_losses_senti = []
         n_totals = 0
         
         # Forward pass through encoder
@@ -343,7 +349,10 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 # Calculate and accumulate loss
                 mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
                 loss += mask_loss + loss_senti.to(device)
-                print_losses.append(mask_loss.item() * nTotal)
+                
+                print_losses.append((mask_loss.item() + loss_senti.item()) * nTotal)
+                print_losses_chatbot.append(mask_loss.item() * nTotal)
+                print_losses_senti.append(loss_senti.item() * nTotal)
                 n_totals += nTotal 
         else:
             for t in range(max_target_len):
@@ -362,11 +371,15 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                     loss_senti = F.mse_loss(ypred_decoder, emotion_mode.float())
                 else:
                     loss_senti = F.cross_entropy(ypred_decoder, emotion_mode.long())
-                    
+                
+                
                 # Calculate and accumulate loss
                 mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
                 loss += mask_loss + loss_senti
-                print_losses.append(mask_loss.item() * nTotal)
+                
+                print_losses.append((mask_loss.item() + loss_senti.item()) * nTotal)
+                print_losses_chatbot.append(mask_loss.item() * nTotal)
+                print_losses_senti.append(loss_senti.item() * nTotal)
                 n_totals += nTotal
         
         
@@ -383,18 +396,28 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         # senti_optimizer.step()
         
         loss_iter_total = sum(print_losses) / n_totals
+        loss_iter_senti = sum(print_losses_senti) / n_totals
+        loss_iter_chatbot = sum(print_losses_chatbot) / n_totals
         # print(loss_iter, n_totals)
         print_loss_total += loss_iter_total
+        print_loss_total_senti += loss_iter_senti
+        print_loss_total_chatbot += loss_iter_chatbot
         
         if iteration % print_every == 0:
             print_loss_avg = print_loss_total / print_every
-            logger.log({'train_loss': print_loss_avg})
-            print("Iteration: {}; Percent complete: {:.1f}%; Average loss: {:.4f}".format(iteration, iteration / n_iteration * 100, print_loss_avg))
+            print_loss_avg_chatbot = print_loss_total_chatbot / print_every
+            print_loss_avg_senti = print_loss_total_senti / print_every
+            logger.log({'total_train_loss': print_loss_avg})
+            logger.log({'total_sentimental_loss': print_loss_avg_senti})
+            logger.log({'total_chatbot_loss': print_loss_avg_chatbot})
+            print("Iteration: {}; Percent complete: {:.1f}%; Average loss: {:.4f}; Avg Senti loss: {:.4f}; Avg Chatbot loss: {:.4f}".format(iteration, iteration / n_iteration * 100, print_loss_avg, print_loss_avg_senti, print_loss_avg_chatbot))
             print_loss_total = 0
+            print_loss_total_senti = 0
+            print_loss_total_chatbot = 0
             
         # Save checkpoint
         if (iteration % save_every == 0):
-            directory = os.path.join(save_dir , model_name)
+            directory = os.path.join(save_dir , model_name_chatbot, senti_model_name)
             if not os.path.exists(directory):
                 os.makedirs(directory)
             torch.save({

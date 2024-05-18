@@ -104,14 +104,14 @@ def main():
     checkpoint_iter = model_settings_chatbot['checkpoint_iter']
 
     loadFilename = os.path.join(save_dir, model_name,
-                        '{}_{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
+                        '{}/{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
     # Load model if a ``loadFilename`` is provided
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
         # If loading on same machine the model was trained on
         checkpoint = torch.load(loadFilename, map_location=device)
         # If loading a model trained on GPU to CPU
-        #checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
+        checkpoint = torch.load(loadFilename, map_location=device)
         encoder_sd = checkpoint['en']
         decoder_sd = checkpoint['de']
         encoder_optimizer_sd = checkpoint['en_opt']
@@ -240,7 +240,7 @@ def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm,
             # Normalize sentence
             input_sentence = normalizeString(input_sentence)
             input_sentence_senti = dialogdata.preprocess_tokens(input_sentence)
-            input_sentence_senti = torch.tensor(input_sentence_senti, dtype=torch.int).unsqueeze(0)
+            input_sentence_senti = torch.tensor(input_sentence_senti, dtype=torch.int).unsqueeze(0).to(device)
             input_ypred_senti = my_lstm(input_sentence_senti)
             if(not regression):
                 input_ypred_senti = torch.argmax(input_ypred_senti, axis=1, keepdims=False) -1
@@ -253,7 +253,7 @@ def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm,
             print('Bot:', output_sentence)
             output_sentence = normalizeString(output_sentence)
             output_sentence_senti = dialogdata.preprocess_tokens(output_sentence)
-            output_sentence_senti = torch.tensor(output_sentence_senti, dtype=torch.int).unsqueeze(0)
+            output_sentence_senti = torch.tensor(output_sentence_senti, dtype=torch.int).unsqueeze(0).to(device)
             output_ypred_senti = my_lstm(output_sentence_senti)
             if(not regression):
                 output_ypred_senti = torch.argmax(output_ypred_senti, axis=1, keepdims=False) -1
