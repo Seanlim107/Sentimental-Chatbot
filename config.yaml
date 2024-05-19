@@ -1,5 +1,5 @@
 data_senti:
-  max_seq: 3
+  max_seq: 10 # Change to 3 when evaluating Sentimental Chatbot
   train_size: 0.8
   batch_size: 16
   num_output: 3
@@ -33,16 +33,17 @@ model_ende:
   decoder_num_layers: 2
   dropout: 0.1
   feature_size: 128
-  checkpoint_iter: 200000 # from which to restart 
+  checkpoint_iter: 100000 # from which to restart 
   
 train_ende:
   emotion: -1 # -1, 0, 1
   lr: 0.0001
   clip: 50
-  teacher_forcing_ratio: 0.5
+  teacher_forcing_ratio: 0.7
   decoder_learning_ratio: 5.0
-  n_iteration: 10000
+  n_iteration: 10005
   # train_batches_per_val: 80
   # val_batches_per_epoch: 20
   save_every: 2000
   print_every: 1
+  three_opt: False

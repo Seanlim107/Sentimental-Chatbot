@@ -37,6 +37,7 @@ device = torch.device("cuda" if USE_CUDA else "cpu")
 # Everything Chatbot
 filepath=os.path.dirname(os.path.realpath(__file__))
 chatbot_filepath = os.path.join(filepath, 'Chatbot')
+
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences
 SOS_token = 1  # Start-of-sentence token
@@ -49,7 +50,7 @@ corpus = os.path.join(chatbot_filepath, 'data', corpus_name)
 datafile = os.path.join(corpus, "formatted_movie_lines.txt")
 
 configpath =  '/config.yaml'
-# print(args)
+
 # Read settings from the YAML file
 
 def main():
@@ -73,17 +74,16 @@ def main():
         senti_model_name = 'Baseline_LSTM_Regressor'
     else:
         senti_model_name = 'Baseline_LSTM_Classifier'
-    # print(MAX_LENGTH)
 
     # # Load/Assemble voc and pairs
     save_dir = os.path.join(filepath, "SC_data", "checkpoints_improved")
     voc = Voc(datafile)
-    save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
-    # voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
+
     if regression:
         senti_model_name = 'Baseline_LSTM_Regressor'
     else:
         senti_model_name = 'Baseline_LSTM_Classifier'
+        
     # Configure models
     ende_mode = 'LSTM' if model_settings_chatbot['lstm'] else 'GRU'
     attn_mode = 'Att' if model_settings_chatbot['use_attention'] else 'NoAtt' 
@@ -92,20 +92,19 @@ def main():
     model_name = f'{ende_mode}_{attn_mode}_{attn_method_mode}'
     attn_mode = ['dot', 'general', 'concat']
     attn_model = 'dot'
-    #``attn_model = 'general'``
-    #``attn_model = 'concat'``
+
     hidden_size = model_settings_chatbot['hidden_dim']
     encoder_n_layers = model_settings_chatbot['encoder_num_layers']
     decoder_n_layers = model_settings_chatbot['decoder_num_layers']
     dropout = model_settings_chatbot['dropout']
-    batch_size = data_settings_chatbot['batch_size']
 
-    # Set checkpoint to load from; set to None if starting from scratch
+    # Set checkpoint to load from (MUST)
     checkpoint_iter = model_settings_chatbot['checkpoint_iter']
 
     loadFilename = os.path.join(save_dir, model_name,
                         '{}/{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
-    # Load model if a ``loadFilename`` is provided
+    
+    # Load model if a ``loadFilename`` is provided (MUST)
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
         # If loading on same machine the model was trained on
@@ -127,7 +126,6 @@ def main():
     embedding = nn.Embedding(voc.num_words, hidden_size)
 
     # Initialize encoder & decoder models
-
     if(model_settings_chatbot['lstm']):
         encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
         if(model_settings_chatbot['use_attention']):
@@ -142,10 +140,7 @@ def main():
         else:
             decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
 
-    # encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout)
-    # decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout)
-
-
+    # Load encoder and decoders from checkpoint
     if os.path.exists(loadFilename):
         embedding.load_state_dict(embedding_sd)
         encoder.load_state_dict(encoder_sd)
@@ -165,35 +160,10 @@ def main():
     encoder.eval()
     decoder.eval()
 
-    # Initialize optimizers
-    # print('Building optimizers ...')
-    # encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
-    # decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
-    # if os.path.exists(loadFilename):
-    #     encoder_optimizer.load_state_dict(encoder_optimizer_sd)
-    #     decoder_optimizer.load_state_dict(decoder_optimizer_sd)
-    #     print('Optimizers built!')
-
-    # If you have CUDA, configure CUDA to call
-    # for state in encoder_optimizer.state.values():
-    #     for k, v in state.items():
-    #         if isinstance(v, torch.Tensor):
-    #             state[k] = v.to(device)
-
-    # for state in decoder_optimizer.state.values():
-    #     for k, v in state.items():
-    #         if isinstance(v, torch.Tensor):
-    #             state[k] = v.to(device)
-
     searcher = GreedySearchDecoder(encoder, decoder)
     # _______________________Everything Chatbot____________________________
 
     # ________________Everything Sentimental Classifier____________________
-
-    # Access and use the settings as needed
-    
-    # senti_filedir = os.path.join(filepath, 'Senti_Classifier')
-    # senti_filename = os.path.join(senti_filedir, f"{senti_model_name}_ckpt_.pth")
     dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings_senti['max_seq'], regression=regression)
 
     senti_voc = dialogdata.voc_keys
@@ -205,13 +175,6 @@ def main():
                             drop_prob=model_settings_senti['drop_prob'], regression=regression)
 
     my_lstm = my_lstm.to(device)
-    optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings_senti['learning_rate'])
-    max_test_acc = 0
-    max_valid_acc = 0
-    min_test_loss = -1
-    min_valid_loss = -1
-    ckpt_epoch = 0
-
 
     if os.path.exists(loadFilename):
         if(regression):
@@ -231,6 +194,8 @@ def main():
     
 def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm, regression):
     input_sentence = ''
+    
+    # Repeat loop
     while (1):
         try:
             # Get input sentence

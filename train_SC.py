@@ -31,13 +31,17 @@ from Senti_Classifier.logger import Logger
 from Senti_Classifier.dataset import DialogData
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 
+
+# This is the code to train the Sentimental Chatbot.
+
 USE_CUDA = torch.cuda.is_available()
 
 device = torch.device("cuda" if USE_CUDA else "cpu")
 
-# Everything Chatbot
+
 filepath=os.path.dirname(os.path.realpath(__file__))
 chatbot_filepath = os.path.join(filepath, 'Chatbot')
+
 # Default word tokens
 PAD_token = 0  # Used for padding short sentences
 SOS_token = 1  # Start-of-sentence token
@@ -50,14 +54,13 @@ corpus = os.path.join(chatbot_filepath, 'data', corpus_name)
 datafile = os.path.join(corpus, "formatted_movie_lines.txt")
 
 configpath =  '/config.yaml'
-# print(args)
 # Read settings from the YAML file
 
 def main():
     settings = read_settings(filepath+configpath)
 
     # _______________________Everything Chatbot____________________________
-    # Access and use the settings as needed
+    # Define variables
     data_settings_chatbot = settings.get('data_ende', {})
     model_settings_chatbot = settings.get('model_ende', {})
     train_settings_chatbot = settings.get('train_ende', {})
@@ -65,15 +68,14 @@ def main():
     model_settings_senti = settings.get('model_senti', {})
     train_settings_senti = settings.get('train_senti', {})
     MAX_LENGTH = data_settings_chatbot['max_seq']  # Maximum sentence length to consider
-    # print(MAX_LENGTH)
 
-    # # Load/Assemble voc and pairs
     save_dir = os.path.join(filepath, "SC_data", "checkpoints_improved")
-    # voc = Voc(datafile)
     save_dir_chatbot = os.path.join("Chatbot", "data", "movie-corpus")
+    
+    # # Load/Assemble voc and pairs
     voc, pairs = loadPrepareData(corpus, corpus_name, datafile, save_dir_chatbot, data_settings_chatbot['max_seq'])
 
-    # Configure models
+    # For File Name Purposes
     ende_mode = 'LSTM' if model_settings_chatbot['lstm'] else 'GRU'
     attn_mode = 'Att' if model_settings_chatbot['use_attention'] else 'NoAtt' 
     attn_method_mode_list = ['dot', 'general', 'concat']
@@ -87,8 +89,8 @@ def main():
         senti_model_name = 'Baseline_LSTM_Regressor'
     else:
         senti_model_name = 'Baseline_LSTM_Classifier'
-    #``attn_model = 'general'``
-    #``attn_model = 'concat'``
+
+    # Initial model variables for ease of use
     hidden_size = model_settings_chatbot['hidden_dim']
     encoder_n_layers = model_settings_chatbot['encoder_num_layers']
     decoder_n_layers = model_settings_chatbot['decoder_num_layers']
@@ -100,13 +102,17 @@ def main():
 
     loadFilename = os.path.join(save_dir, model_name,
                         '{}/{}_{}.tar'.format(senti_model_name, checkpoint_iter, 'checkpoint'))
+    
     # Load model if a ``loadFilename`` is provided
     if os.path.exists(loadFilename):
         print('Checkpoint Detected')
+        
         # If loading on same machine the model was trained on
         checkpoint = torch.load(loadFilename, map_location=device)
+        
         # If loading a model trained on GPU to CPU
         #checkpoint = torch.load(loadFilename, map_location=torch.device('cpu'))
+        
         encoder_sd = checkpoint['en']
         decoder_sd = checkpoint['de']
         encoder_optimizer_sd = checkpoint['en_opt']
@@ -119,8 +125,8 @@ def main():
     # Initialize word embeddings
     embedding = nn.Embedding(voc.num_words, hidden_size)
     embedding = embedding.to(device)
+    
     # Initialize encoder & decoder models
-
     if(model_settings_chatbot['lstm']):
         encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout, rnn_cell='LSTM') #GRU
         if(model_settings_chatbot['use_attention']):
@@ -135,19 +141,17 @@ def main():
         else:
             decoder = SimpleDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout, rnn_cell='GRU')
 
-    # encoder = EncoderRNN(hidden_size, embedding, encoder_n_layers, dropout)
-    # decoder = LuongAttnDecoderRNN(attn_model, embedding, hidden_size, voc.num_words, decoder_n_layers, dropout)
 
-
+    # Load Sentimental Chatbot Checkpoints (Not Baseline Chatbot Checkpoints)
     if os.path.exists(loadFilename):
         embedding.load_state_dict(embedding_sd)
         encoder.load_state_dict(encoder_sd)
         decoder.load_state_dict(decoder_sd)
-        print('Checkpoint Loaded')
+        print('Encoder and Decoder Loaded')
+        
     # Use appropriate device
     encoder = encoder.to(device)
     decoder = decoder.to(device)
-    print('Models built and ready to go!')
 
     # Configure training/optimization
     clip = train_settings_chatbot['clip']
@@ -165,7 +169,6 @@ def main():
     
 
     # Initialize optimizers
-    # print('Building optimizers ...')
     encoder_optimizer = optim.Adam(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.Adam(decoder.parameters(), lr=learning_rate * decoder_learning_ratio)
     if os.path.exists(loadFilename):
@@ -173,7 +176,7 @@ def main():
         decoder_optimizer.load_state_dict(decoder_optimizer_sd)
         print('Optimizers Loaded!')
 
-    # If you have CUDA, configure CUDA to call
+    # configure device to optimizer cells
     for state in encoder_optimizer.state.values():
         for k, v in state.items():
             if isinstance(v, torch.Tensor):
@@ -184,30 +187,34 @@ def main():
             if isinstance(v, torch.Tensor):
                 state[k] = v.to(device)
 
-    searcher = GreedySearchDecoder(encoder, decoder)
     # _______________________Everything Chatbot____________________________
-
+    # _____________________________________________________________________
     # ________________Everything Sentimental Classifier____________________
-
-    # Access and use the settings as needed
     
-
+    # If vocabulary should be re-initialised or loaded from a pkl file
     voc_init=data_settings_senti['voc_init']
     
+    # File Names
     senti_filedir = os.path.join(filepath, 'Senti_Classifier')
     senti_filename = os.path.join(senti_filedir, f"{senti_model_name}_ckpt_.pth")
+    
+    # Initialise dataset
     dialogdata = DialogData(voc_init_cache=voc_init, max_seq=data_settings_senti['max_seq'], regression=regression)
 
     senti_voc = dialogdata.voc_keys
 
-
+    # Initialise model
     my_lstm = SentimentLSTM(vocab_senti_size=len(senti_voc), embedding_dim=model_settings_senti['embedding_dim'],
                             output_size=data_settings_senti['num_output'], lstm_hidden_dim=model_settings_senti['lstm_hidden_dim'], hidden_dim=model_settings_senti['hidden_dim'],
                             hidden_dim2=model_settings_senti['hidden_dim2'],n_layers=model_settings_senti['n_layers'],
                             drop_prob=model_settings_senti['drop_prob'], regression=regression)
 
-    # my_lstm = my_lstm.to(device)
-    # my_lstm.eval()
+    # For training with 3 optimizers (Dysfunctional)
+    if(train_settings_chatbot['three_opt']):
+        my_lstm = my_lstm.to(device)
+        my_lstm.eval()
+        
+    # Initialise training parameters and variables for saving checkpoints
     optimizer = torch.optim.Adam(list(my_lstm.parameters()), lr = train_settings_senti['learning_rate'])
     max_test_acc = 0
     max_valid_acc = 0
@@ -216,6 +223,7 @@ def main():
     ckpt_epoch = 0
 
 
+    # Load from checkpoints (MUST)
     if os.path.exists(senti_filename):
         print(f'Checkpoint detected for Sentimental Classifier')
         if(regression):
@@ -226,6 +234,7 @@ def main():
     else:
         raise Exception('Backbone for Sentimental Classifier needed')
     # ________________Everything Sentimental Classifier____________________
+    # ______________________________________________________________________
     
     train_sentimental_chatbot(model_name, voc, pairs, encoder, decoder, embedding,
                               encoder_optimizer, decoder_optimizer, 
@@ -241,13 +250,18 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
           model_settings_senti, train_settings_senti, data_settings_senti, save_dir,
           loadFilename=None):
     
+    # Initialise variables
     voc_senti = dialogdata.len_voc_keys
     
     regression = model_settings_senti['regression']
+    
+    
     if regression:
         senti_model_name = 'Baseline_LSTM_Regressor'
     else:
         senti_model_name = 'Baseline_LSTM_Classifier'
+        
+        
     batch_size_senti = 1
     batch_size_chatbot = data_settings_chatbot['batch_size']
     clip_chatbot = train_settings_chatbot['clip']
@@ -260,34 +274,33 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
     max_length = data_settings_chatbot['max_seq']
     emotion_mode = torch.tensor([train_settings_chatbot['emotion']]).expand(batch_size_chatbot).unsqueeze(1)
     
-    
+    # Define wandb logger
     wandb_logger = Logger(
         f"inm706_sentiment_chatbot_with_backprop_ende_pretrained_regressor",
         project='inm706_CW')
     logger = wandb_logger.get_logger()
     
+    # Converts training batch to randomly sample pairs
     training_batches = [batch2TrainData(voc, [random.choice(pairs) for _ in range(batch_size_chatbot)])
                       for _ in range(n_iteration)]
+    
+    # Wandb variables
     print_loss_total = 0
     print_loss_total_chatbot = 0
     print_loss_total_senti = 0
-    print('Initializing ...')
     start_iteration = 1
-    print_loss = 0
+    
+    # Load epoch if checkpoint exists
     if os.path.exists(loadFilename):
         checkpoint = torch.load(loadFilename, map_location=device)
         start_iteration = checkpoint['iteration'] + 1
         print(f'Checkpoint detected, beginning from {start_iteration}')
         
-    # filename_sentimental = f"{model_name_chatbot}_{model_name}_ckpt_.pth"
     
-    # Variables to compare testing and validation accuracy FOR CHECKPOINTS ONLY
-    min_test_loss = -1
-    min_valid_loss = -1
-    ckpt_epoch = 0
-    
+    # Training Loop
     for iteration in tqdm(range(start_iteration, n_iteration + 1), desc="Training Chatbot"):
         training_batch = training_batches[iteration - 1]
+        
         # Extract fields from batch
         input_variable, lengths, target_variable, mask, max_target_len = training_batch
 
@@ -298,6 +311,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         input_variable = input_variable.to(device)
         target_variable = target_variable.to(device)
         mask = mask.to(device)
+        
         # Lengths for RNN packing should always be on the CPU
         lengths = lengths.to("cpu")
         
@@ -311,7 +325,7 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         # Forward pass through encoder
         encoder_outputs, encoder_hidden = encoder(input_variable, lengths)
 
-        # Create initial decoder input (start with SOS tokens for each sentence)
+        # Create BOS as first decoder input
         decoder_input = torch.LongTensor([[SOS_token for _ in range(batch_size_chatbot)]])
         decoder_input = decoder_input.to(device)
         
@@ -328,7 +342,10 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
             
         # Determine if we are using teacher forcing this iteration
         use_teacher_forcing = True if random.random() < teacher_forcing_ratio else False
+        
+        # Implement sentimental classifier for evaluation
         sentimental_classifier.eval()
+        
         # Forward batch of sequences through decoder one time step at a time
         if use_teacher_forcing:
             for t in range(max_target_len):
@@ -337,10 +354,18 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 )
                 # Teacher forcing: next input is current target
                 decoder_input = target_variable[t].view(1, -1)
+                
+                # Decode decoder output
                 decoder_to_senti = [voc.index2word[decoder_input[:,my_iter].item()] for my_iter in range(decoder_input.shape[1])]
+                
+                # Embed with Sentimental Classifier's embeddings
                 senti_input_word = [dialogdata.preprocess_tokens(batch_tokens) for batch_tokens in decoder_to_senti]
                 senti_input_word = torch.tensor(senti_input_word, dtype=torch.int)
+                
+                # Implement sentimental classifier on the decoded word
                 ypred_decoder = sentimental_classifier(senti_input_word)
+                
+                # Calculate sentimental classifier loss
                 if(regression):
                     loss_senti = F.mse_loss(ypred_decoder, emotion_mode.float())
                 else:
@@ -361,12 +386,22 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 )
                 # No teacher forcing: next input is decoder's own current output
                 _, topi = decoder_output.topk(1)
+                
+                # Take top 1 value
                 decoder_input = torch.LongTensor([[topi[i][0] for i in range(batch_size_chatbot)]])
                 decoder_input = decoder_input.to(device)
+                
+                # Decode decoder output
                 decoder_to_senti = [voc.index2word[decoder_input[:,my_iter].item()] for my_iter in range(decoder_input.shape[1])]
+                
+                # Embed with Sentimental Classifier's embeddings
                 senti_input_word = [dialogdata.preprocess_tokens(batch_tokens) for batch_tokens in decoder_to_senti]
                 senti_input_word = torch.tensor(senti_input_word, dtype=torch.int)
+                
+                # Implement sentimental classifier on the decoded word
                 ypred_decoder = sentimental_classifier(senti_input_word)
+                
+                # Calculate sentimental classifier loss
                 if(regression):
                     loss_senti = F.mse_loss(ypred_decoder, emotion_mode.float())
                 else:
@@ -375,6 +410,8 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
                 
                 # Calculate and accumulate loss
                 mask_loss, nTotal = maskNLLLoss(decoder_output, target_variable[t], mask[t])
+                
+                # Add chatbot loss and sentimental classifier loss
                 loss += mask_loss + loss_senti
                 
                 print_losses.append((mask_loss.item() + loss_senti.item()) * nTotal)
@@ -386,23 +423,29 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
         # Clip gradients: gradients are modified in place
         _ = nn.utils.clip_grad_norm_(encoder.parameters(), clip_chatbot)
         _ = nn.utils.clip_grad_norm_(decoder.parameters(), clip_chatbot)
-        # _ = nn.utils.clip_grad_norm_(sentimental_classifier.parameters(), clip_chatbot)
         
+        if train_settings_chatbot['three_opt']:
+            _ = nn.utils.clip_grad_norm_(sentimental_classifier.parameters(), clip_chatbot)
+            
+        # Set at backward pass mode for loss functions
         loss.backward()
         
         # Adjust model weights
         encoder_optimizer.step()
         decoder_optimizer.step()
-        # senti_optimizer.step()
+        
+        if train_settings_chatbot['three_opt']:
+            senti_optimizer.step()
         
         loss_iter_total = sum(print_losses) / n_totals
         loss_iter_senti = sum(print_losses_senti) / n_totals
         loss_iter_chatbot = sum(print_losses_chatbot) / n_totals
-        # print(loss_iter, n_totals)
+
         print_loss_total += loss_iter_total
         print_loss_total_senti += loss_iter_senti
         print_loss_total_chatbot += loss_iter_chatbot
         
+        # Log on wandb
         if iteration % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_avg_chatbot = print_loss_total_chatbot / print_every
@@ -436,50 +479,5 @@ def train_sentimental_chatbot(model_name_chatbot, voc, pairs, encoder, decoder, 
             }, os.path.join(directory, '{}_{}.tar'.format(iteration, 'checkpoint')))
             print('Checkpoint Saved')
             
-    
-
-    
-def evaluate_chatbot_input(encoder, decoder, searcher, voc, dialogdata, my_lstm, regression):
-    input_sentence = ''
-    while (1):
-        try:
-            # Get input sentence
-            input_sentence = input('You > ')
-            # Check if it is quit case
-            if input_sentence == 'q' or input_sentence == 'quit': break
-            # Normalize sentence
-            input_sentence = normalizeString(input_sentence)
-            input_sentence_senti = dialogdata.preprocess_tokens(input_sentence)
-            input_sentence_senti = torch.tensor(input_sentence_senti, dtype=torch.int).unsqueeze(0)
-            input_ypred_senti = my_lstm(input_sentence_senti)
-            if(not regression):
-                input_ypred_senti = torch.argmax(input_ypred_senti, axis=1, keepdims=False) -1
-            print('You Sentiment: ', input_ypred_senti)
-            # Evaluate sentence
-            output_words = evaluate(encoder, decoder, searcher, voc, input_sentence)
-            # Format and print response sentence
-            output_words[:] = [x for x in output_words if not (x == 'EOS' or x == 'PAD')]
-            output_sentence = ' '.join(output_words)
-            print('Bot:', output_sentence)
-            output_sentence = normalizeString(output_sentence)
-            output_sentence_senti = dialogdata.preprocess_tokens(output_sentence)
-            output_sentence_senti = torch.tensor(output_sentence_senti, dtype=torch.int).unsqueeze(0)
-            output_ypred_senti = my_lstm(output_sentence_senti)
-            if(not regression):
-                output_ypred_senti = torch.argmax(output_ypred_senti, axis=1, keepdims=False) -1
-            print('Bot Sentiment:', output_ypred_senti)
-            
-
-        except KeyError:
-            print("Error: Encountered unknown word.")
-            
 if __name__ == '__main__':
     main()
-# encoder.eval()
-# decoder.eval()
-
-# # Initialize search module
-# searcher = GreedySearchDecoder(encoder, decoder)
-
-
-# evaluateInput(encoder, decoder, searcher, voc)

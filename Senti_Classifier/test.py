@@ -65,7 +65,7 @@ def evaluateLoop(data_settings, model_settings, train_settings):
         ypred = my_lstm(input_sentence)
         if(not regression):
             ypred = torch.argmax(ypred, axis=1, keepdims=False) -1
-        print(ypred)
+        print(ypred.item())
         
     
 
@@ -87,3 +87,5 @@ def main():
     evaluateLoop(data_settings, model_settings, train_settings)
     
     
+if __name__ == "__main__":
+    main()
